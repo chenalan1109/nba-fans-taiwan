@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, cast
@@ -31,9 +32,14 @@ class _PgConnection:
 
     def execute(self, sql: str, params: Any = ()) -> "_PgConnection":
         pg_sql = sql.replace("?", "%s")
+        # Convert SQLite-only INSERT variants to Postgres equivalents
+        is_or_variant = bool(re.match(r"^\s*INSERT\s+OR\s+(IGNORE|REPLACE)\b", pg_sql, re.IGNORECASE))
+        if is_or_variant:
+            pg_sql = re.sub(r"(?i)INSERT\s+OR\s+(IGNORE|REPLACE)\b", "INSERT", pg_sql, count=1)
         # Auto-append RETURNING id for INSERT so callers can use .lastrowid
         if pg_sql.strip().upper().startswith("INSERT") and "RETURNING" not in pg_sql.upper():
-            pg_sql = pg_sql.rstrip() + " RETURNING id"
+            conflict = " ON CONFLICT DO NOTHING" if is_or_variant else ""
+            pg_sql = pg_sql.rstrip() + conflict + " RETURNING id"
         self._cur = self._conn.cursor()
         self._cur.execute(pg_sql, list(params) if params else [])
         self._cached_lastrowid = None

@@ -97,3 +97,36 @@ CREATE TABLE IF NOT EXISTS comment_likes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (comment_id, voter_id)
 );
+
+CREATE TABLE IF NOT EXISTS prophet_users (
+    id BIGSERIAL PRIMARY KEY,
+    nickname TEXT UNIQUE NOT NULL,
+    coins INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS prediction_items (
+    item_key TEXT PRIMARY KEY,
+    item_label TEXT NOT NULL,
+    category TEXT NOT NULL CHECK (category IN ('instant', 'longterm')),
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'locked', 'settled')),
+    opened_at TEXT NOT NULL,
+    locked_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_predictions (
+    id BIGSERIAL PRIMARY KEY,
+    nickname TEXT NOT NULL REFERENCES prophet_users(nickname),
+    item_key TEXT NOT NULL REFERENCES prediction_items(item_key),
+    prediction TEXT NOT NULL,
+    last_changed_at TEXT NOT NULL,
+    settled INTEGER NOT NULL DEFAULT 0,
+    coins_earned INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (nickname, item_key)
+);
+
+CREATE TABLE IF NOT EXISTS settlement_events (
+    item_key TEXT PRIMARY KEY REFERENCES prediction_items(item_key),
+    correct_answer TEXT NOT NULL,
+    settled_at TEXT NOT NULL
+);
