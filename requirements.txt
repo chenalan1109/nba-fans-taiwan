@@ -1,0 +1,6 @@
+streamlit
+pandas
+plotly
+nba_api
+requests
+psycopg2-binary

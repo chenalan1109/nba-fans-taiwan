@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Type checker / linter cache
+.mypy_cache/
+
+# Test cache
+.pytest_cache/
+
+# Streamlit secrets — NEVER commit this file
+.streamlit/secrets.toml
+
+# SQLite runtime DB — generated at startup, not source code
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# macOS
+.DS_Store
+Thumbs.db
