@@ -36,10 +36,11 @@ class _PgConnection:
         is_or_variant = bool(re.match(r"^\s*INSERT\s+OR\s+(IGNORE|REPLACE)\b", pg_sql, re.IGNORECASE))
         if is_or_variant:
             pg_sql = re.sub(r"(?i)INSERT\s+OR\s+(IGNORE|REPLACE)\b", "INSERT", pg_sql, count=1)
-        # Auto-append RETURNING id for INSERT so callers can use .lastrowid
+        # Auto-append RETURNING * for INSERT so callers can use .lastrowid.
+        # Use * instead of id because some tables (e.g. prediction_items) have no id column.
         if pg_sql.strip().upper().startswith("INSERT") and "RETURNING" not in pg_sql.upper():
             conflict = " ON CONFLICT DO NOTHING" if is_or_variant else ""
-            pg_sql = pg_sql.rstrip() + conflict + " RETURNING id"
+            pg_sql = pg_sql.rstrip() + conflict + " RETURNING *"
         self._cur = self._conn.cursor()
         self._cur.execute(pg_sql, list(params) if params else [])
         self._cached_lastrowid = None
