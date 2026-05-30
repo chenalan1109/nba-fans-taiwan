@@ -8,7 +8,7 @@ from typing import Any
 import streamlit as st
 
 from config.settings import get_runtime_settings
-from services import auth_service, prophet_service as ps
+from services import prophet_service as ps
 from services.cached import get_playoff_series, get_season_phase
 from services.hall_service import (
     create_hall_poll,
@@ -47,40 +47,10 @@ def _nickname() -> str:
     return user["nickname"] if user else ""
 
 
-def _render_auth_panel() -> None:
-    """Show login/register panel and return once authenticated."""
-    st.info("請先登入或註冊帳號，才能投票和預測。")
-    tab_login, tab_register = st.tabs(["登入", "註冊"])
-
-    with tab_login:
-        username = st.text_input("帳號", key="login_username", placeholder="輸入帳號").strip()
-        password = st.text_input("密碼", type="password", key="login_password").strip()
-        if st.button("登入", key="btn_login", use_container_width=True):
-            if not username or not password:
-                st.warning("請輸入帳號與密碼。")
-            else:
-                user = auth_service.login_user(username, password)
-                if user:
-                    st.session_state["logged_in_user"] = user
-                    st.session_state["voter_id"] = user["nickname"]
-                    st.rerun()
-                else:
-                    st.error("帳號或密碼錯誤。")
-
-    with tab_register:
-        new_username = st.text_input("帳號（4–30字元）", key="reg_username", placeholder="設定登入帳號").strip()
-        new_nickname = st.text_input("暱稱（公開顯示）", key="reg_nickname", placeholder="設定你的暱稱").strip()
-        new_password = st.text_input("密碼（至少4字元）", type="password", key="reg_password").strip()
-        new_password2 = st.text_input("確認密碼", type="password", key="reg_password2").strip()
-        if st.button("建立帳號", key="btn_register", use_container_width=True):
-            if new_password != new_password2:
-                st.error("兩次密碼不一致。")
-            else:
-                ok, msg = auth_service.register_user(new_username, new_password, new_nickname)
-                if ok:
-                    st.success("帳號建立成功！請切換到「登入」頁面登入。")
-                else:
-                    st.error(msg)
+def _go_login_button(key: str) -> None:
+    if st.button("前往登入/註冊", key=key, type="primary"):
+        st.session_state["main_nav"] = "登入/註冊"
+        st.rerun()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -110,7 +80,9 @@ def render() -> None:
     user = _current_user()
     nickname = _nickname()
 
-    # Sidebar-style user bar
+    polls = [p for p in list_active_polls() if p["category"] != "referee"]
+    total_votes = get_total_active_votes()
+
     if user:
         prophet_user = ps.get_or_create_user(nickname)
         col_info, col_logout = st.columns([4, 1])
@@ -119,31 +91,24 @@ def render() -> None:
             st.session_state.pop("logged_in_user", None)
             st.session_state.pop("voter_id", None)
             st.rerun()
+
+        lb_full = ps.get_leaderboard(200)
+        rank = next((i + 1 for i, u in enumerate(lb_full) if u["nickname"] == nickname), "—")
+        all_preds = ps.get_user_all_predictions(nickname, season)
+        correct = sum(1 for p in all_preds if p.get("coins_earned", 0) > 0)
+        render_kpi_strip([
+            ("先知幣", str(prophet_user["coins"]), "累積總數"),
+            ("排名", f"#{rank}", "全體預測者"),
+            ("命中", str(correct), f"共 {len(all_preds)} 筆預測"),
+            ("投票主題", str(len(polls)), f"{total_votes} 票"),
+        ])
     else:
-        _render_auth_panel()
-        # Still show public KPI while not logged in
-        polls = [p for p in list_active_polls() if p["category"] != "referee"]
-        total_votes = get_total_active_votes()
+        st.info("登入後即可投票、預測、競猜先知幣。")
+        _go_login_button("voting_go_login")
         render_kpi_strip([
             ("投票主題", str(len(polls)), "Active"),
             ("已收到票數", str(total_votes), "全部主題加總"),
         ])
-        return
-
-    # ── Logged-in view ────────────────────────────────────────────────────────
-    polls = [p for p in list_active_polls() if p["category"] != "referee"]
-    total_votes = get_total_active_votes()
-
-    lb_full = ps.get_leaderboard(200)
-    rank = next((i + 1 for i, u in enumerate(lb_full) if u["nickname"] == nickname), "—")
-    all_preds = ps.get_user_all_predictions(nickname, season)
-    correct = sum(1 for p in all_preds if p.get("coins_earned", 0) > 0)
-    render_kpi_strip([
-        ("先知幣", str(prophet_user["coins"]), "累積總數"),
-        ("排名", f"#{rank}", "全體預測者"),
-        ("命中", str(correct), f"共 {len(all_preds)} 筆預測"),
-        ("投票主題", str(len(polls)), f"{total_votes} 票"),
-    ])
 
     tab_polls, tab_instant, tab_longterm, tab_records, tab_lb = st.tabs(
         ["🏛️ 球員殿堂", "⚡ 即時預測", "🏆 長期預測", "📋 我的紀錄", "🥇 排行榜"]
@@ -189,62 +154,66 @@ def _render_hall_poll(poll: dict[str, Any], nickname: str) -> None:
     col_input, col_chart = st.columns([1, 1])
 
     with col_input:
-        if current_vote:
-            st.info(f"你目前的選擇：**{current_vote}**")
+        if not nickname:
+            st.info("登入後即可投票。")
+            _go_login_button(f"hall_login_{poll_key}")
+        else:
+            if current_vote:
+                st.info(f"你目前的選擇：**{current_vote}**")
 
-        choice: str | None = None
+            choice: str | None = None
 
-        if poll_type == "player":
-            keyword = st.text_input(
-                "搜尋球員",
-                value=st.session_state.get(f"hall_kw_{poll_key}", ""),
-                placeholder='輸入姓名關鍵字，如 "LeBron"',
-                key=f"hall_kw_input_{poll_key}",
-            )
-            st.session_state[f"hall_kw_{poll_key}"] = keyword
-            hits = ps.search_players(keyword) if len(keyword) >= 2 else []
-            if hits:
-                default_idx = hits.index(current_vote) if current_vote in hits else 0
+            if poll_type == "player":
+                keyword = st.text_input(
+                    "搜尋球員",
+                    value=st.session_state.get(f"hall_kw_{poll_key}", ""),
+                    placeholder='輸入姓名關鍵字，如 "LeBron"',
+                    key=f"hall_kw_input_{poll_key}",
+                )
+                st.session_state[f"hall_kw_{poll_key}"] = keyword
+                hits = ps.search_players(keyword) if len(keyword) >= 2 else []
+                if hits:
+                    default_idx = hits.index(current_vote) if current_vote in hits else 0
+                    choice = st.selectbox(
+                        f"搜尋結果（{len(hits)} 位）",
+                        hits,
+                        index=default_idx,
+                        key=f"hall_sel_{poll_key}",
+                    )
+                elif keyword and len(keyword) >= 2:
+                    st.caption("找不到符合的球員，請換關鍵字。")
+                else:
+                    st.caption("輸入 2 個字以上開始搜尋。")
+
+            elif poll_type == "team":
+                team_names = ps.get_nba_team_names()
+                default_idx = team_names.index(current_vote) if current_vote in team_names else 0
                 choice = st.selectbox(
-                    f"搜尋結果（{len(hits)} 位）",
-                    hits,
+                    "選擇球隊",
+                    team_names,
                     index=default_idx,
                     key=f"hall_sel_{poll_key}",
                 )
-            elif keyword and len(keyword) >= 2:
-                st.caption("找不到符合的球員，請換關鍵字。")
-            else:
-                st.caption("輸入 2 個字以上開始搜尋。")
 
-        elif poll_type == "team":
-            team_names = ps.get_nba_team_names()
-            default_idx = team_names.index(current_vote) if current_vote in team_names else 0
-            choice = st.selectbox(
-                "選擇球隊",
-                team_names,
-                index=default_idx,
-                key=f"hall_sel_{poll_key}",
-            )
+            elif poll_type == "custom":
+                options: list[str] = list(poll.get("options", []))
+                default_idx = options.index(current_vote) if current_vote in options else 0
+                choice = st.radio(
+                    "選擇",
+                    options,
+                    index=default_idx,
+                    key=f"hall_radio_{poll_key}",
+                    horizontal=False,
+                )
 
-        elif poll_type == "custom":
-            options: list[str] = list(poll.get("options", []))
-            default_idx = options.index(current_vote) if current_vote in options else 0
-            choice = st.radio(
-                "選擇",
-                options,
-                index=default_idx,
-                key=f"hall_radio_{poll_key}",
-                horizontal=False,
-            )
-
-        btn_label = "更改選擇" if current_vote else "送出"
-        if choice and st.button(btn_label, key=f"hall_btn_{poll_key}", use_container_width=True):
-            if upsert_hall_vote(poll_key, nickname, str(choice)):
-                if poll_type == "player":
-                    st.session_state.pop(f"hall_kw_{poll_key}", None)
-                st.rerun()
-            else:
-                st.error("送出失敗，請稍後再試。")
+            btn_label = "更改選擇" if current_vote else "送出"
+            if choice and st.button(btn_label, key=f"hall_btn_{poll_key}", use_container_width=True):
+                if upsert_hall_vote(poll_key, nickname, str(choice)):
+                    if poll_type == "player":
+                        st.session_state.pop(f"hall_kw_{poll_key}", None)
+                    st.rerun()
+                else:
+                    st.error("送出失敗，請稍後再試。")
 
     with col_chart:
         _render_hall_chart(poll_key)
@@ -286,7 +255,6 @@ def _render_hall_admin_panel() -> None:
 
         st.success("已驗證，可管理投票主題。")
 
-        # List existing polls with toggle/delete
         st.markdown("**現有投票主題**")
         all_polls = list_all_hall_polls()
         for p in all_polls:
@@ -391,6 +359,11 @@ def _render_instant_item(
         if is_locked:
             st.caption("系列賽進行中，仍可押注，但幣數較低。")
 
+        if not nickname:
+            st.info("登入後即可下注。")
+            _go_login_button(f"instant_go_login_{item_key}")
+            return
+
         default_idx = 0
         if user_pred and user_pred["prediction"] in options:
             default_idx = options.index(user_pred["prediction"])
@@ -472,6 +445,11 @@ def _render_longterm_tab(nickname: str, season: str) -> None:
                 st.caption("此項目已鎖定，無法更改預測。")
                 continue
 
+            if not nickname:
+                st.info("登入後即可下注。")
+                _go_login_button(f"lt_go_login_{item_key}")
+                continue
+
             if suffix == "champion":
                 choice: str | None = st.selectbox(
                     "選擇隊伍",
@@ -541,7 +519,8 @@ def _render_longterm_tab(nickname: str, season: str) -> None:
 def _render_records_tab(nickname: str, season: str) -> None:
     render_section("我的預測紀錄")
     if not nickname:
-        st.info("請先登入。")
+        st.info("登入後即可查看你的預測紀錄。")
+        _go_login_button("records_go_login")
         return
 
     preds = ps.get_user_all_predictions(nickname, season)

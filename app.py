@@ -4,7 +4,7 @@ import streamlit as st
 
 from config.settings import get_runtime_settings
 from database.db import init_db
-from _pages import fantasy_team, home, matchup_debate, player_stats, realtime_hub, voting
+from _pages import auth_page, fantasy_team, home, matchup_debate, player_stats, realtime_hub, voting
 from services import prophet_service as ps
 from services.nba_api_service import get_data_mode
 from ui.theme import inject_global_styles
@@ -17,6 +17,7 @@ PAGES = {
     "球迷投票": voting.render,
     "Fantasy Team": fantasy_team.render,
     "Matchup Debate": matchup_debate.render,
+    "登入/註冊": auth_page.render,
 }
 
 
@@ -54,7 +55,7 @@ def main() -> None:
             st.caption("尚未登入，請前往「球迷投票」登入。")
 
         st.divider()
-        selected_page = st.radio("功能選單", list(PAGES.keys()))
+        selected_page = st.radio("功能選單", list(PAGES.keys()), key="main_nav")
         st.divider()
         st.caption(f"Milestone 10 | data mode: {get_data_mode()}")
         st.caption(f"app mode: {runtime_settings.app_mode}")

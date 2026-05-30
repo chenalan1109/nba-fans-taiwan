@@ -30,10 +30,7 @@ def get_current_season() -> str:
 def detect_season_phase() -> SeasonPhase:
     if _is_seed_mode():
         return SeasonPhase.PLAYOFFS
-    try:
-        return _detect_from_api()
-    except Exception:
-        return _detect_from_date()
+    return _detect_from_date()
 
 
 def get_playoff_series() -> list[dict[str, Any]]:
