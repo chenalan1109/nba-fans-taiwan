@@ -232,7 +232,7 @@ def _render_rating_section(players: list[dict[str, Any]], game_id: str = "", sid
     if not voter_id:
         st.info("登入後即可為球員評分。")
         if st.button("前往登入/註冊", key=f"go_login_rate_{scope}", type="primary"):
-            st.session_state["main_nav"] = "登入/註冊"
+            st.session_state["nav_target"] = "登入/註冊"
             st.rerun()
 
 
@@ -303,7 +303,7 @@ def _render_referee_vote_section(game_id: str, home_team: str, away_team: str, s
     if not voter_id:
         st.info("登入後即可為裁判評分。")
         if st.button("前往登入/註冊", key=f"{pfx}go_login_ref_{game_id}", type="primary"):
-            st.session_state["main_nav"] = "登入/註冊"
+            st.session_state["nav_target"] = "登入/註冊"
             st.rerun()
 
 
@@ -341,7 +341,7 @@ def _render_comment_expander(game: dict[str, object], section: str = "") -> None
         else:
             st.info("登入後即可留言與按讚。")
             if st.button("前往登入/註冊", key=f"{pfx}go_login_comment_{game_id}", type="primary"):
-                st.session_state["main_nav"] = "登入/註冊"
+                st.session_state["nav_target"] = "登入/註冊"
                 st.rerun()
 
         st.divider()

@@ -49,7 +49,7 @@ def _nickname() -> str:
 
 def _go_login_button(key: str) -> None:
     if st.button("前往登入/註冊", key=key, type="primary"):
-        st.session_state["main_nav"] = "登入/註冊"
+        st.session_state["nav_target"] = "登入/註冊"
         st.rerun()
 
 
@@ -68,12 +68,19 @@ def render() -> None:
     if phase in (SeasonPhase.PLAYOFFS, SeasonPhase.PLAY_IN):
         series_list = get_playoff_series(data_mode)
 
-    ps.init_prophet(season)
     ensure_playoff_polls(phase=phase.value, series_list=series_list)
 
+    if f"prophet_init_{season}" not in st.session_state:
+        ps.init_prophet(season)
+        st.session_state[f"prophet_init_{season}"] = True
+
     if phase in (SeasonPhase.PLAYOFFS, SeasonPhase.PLAY_IN):
-        ps.sync_instant_items(series_list, season)
-        ps.settle_finished_series(series_list, season)
+        _sync_ts = st.session_state.get("_prophet_sync_ts")
+        _now_dt = datetime.datetime.now(datetime.timezone.utc)
+        if _sync_ts is None or (_now_dt - _sync_ts).total_seconds() > 300:
+            ps.sync_instant_items(series_list, season)
+            ps.settle_finished_series(series_list, season)
+            st.session_state["_prophet_sync_ts"] = _now_dt
 
     _render_runtime_notice()
 
@@ -92,8 +99,7 @@ def render() -> None:
             st.session_state.pop("voter_id", None)
             st.rerun()
 
-        lb_full = ps.get_leaderboard(200)
-        rank = next((i + 1 for i, u in enumerate(lb_full) if u["nickname"] == nickname), "—")
+        rank = ps.get_user_rank(nickname) or "—"
         all_preds = ps.get_user_all_predictions(nickname, season)
         correct = sum(1 for p in all_preds if p.get("coins_earned", 0) > 0)
         render_kpi_strip([

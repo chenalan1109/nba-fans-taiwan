@@ -144,7 +144,7 @@ def _render_vote_panel(matchup_id: str, team_a_name: str, team_b_name: str, is_c
     if not voter_id:
         st.info("登入後即可投票。")
         if st.button("前往登入/註冊", key=f"matchup_go_login_{matchup_id}", type="primary"):
-            st.session_state["main_nav"] = "登入/註冊"
+            st.session_state["nav_target"] = "登入/註冊"
             st.rerun()
         return
 
@@ -187,7 +187,7 @@ def _render_create_form(seed_players: list[Player]) -> None:
     if not user:
         st.info("登入後即可建立自訂對決。")
         if st.button("前往登入/註冊", key="debate_create_go_login", type="primary"):
-            st.session_state["main_nav"] = "登入/註冊"
+            st.session_state["nav_target"] = "登入/註冊"
             st.rerun()
         return
 

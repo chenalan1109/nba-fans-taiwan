@@ -118,7 +118,7 @@ def _render_market(username: str, nickname: str) -> None:
         st.divider()
         st.info("登入後即可購買球員。")
         if st.button("前往登入/註冊", key="market_go_login", type="primary"):
-            st.session_state["main_nav"] = "登入/註冊"
+            st.session_state["nav_target"] = "登入/註冊"
             st.rerun()
 
 
@@ -129,7 +129,7 @@ def _render_pool(username: str, nickname: str) -> None:
     if not username:
         st.info("登入後即可查看你的球員池。")
         if st.button("前往登入/註冊", key="pool_go_login", type="primary"):
-            st.session_state["main_nav"] = "登入/註冊"
+            st.session_state["nav_target"] = "登入/註冊"
             st.rerun()
         return
 
@@ -163,7 +163,7 @@ def _render_team_builder(username: str, nickname: str) -> None:
     if not username:
         st.info("登入後即可組建 Fantasy Team。")
         if st.button("前往登入/註冊", key="team_go_login", type="primary"):
-            st.session_state["main_nav"] = "登入/註冊"
+            st.session_state["nav_target"] = "登入/註冊"
             st.rerun()
         return
 

@@ -57,6 +57,8 @@ def main() -> None:
             st.caption("尚未登入，請前往「球迷投票」登入。")
 
         st.divider()
+        if "nav_target" in st.session_state:
+            st.session_state["main_nav"] = st.session_state.pop("nav_target")
         selected_page = st.radio("功能選單", list(PAGES.keys()), key="main_nav")
         st.divider()
         st.caption(f"Milestone 10 | data mode: {get_data_mode()}")

@@ -68,6 +68,17 @@ def get_leaderboard(limit: int = 20) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def get_user_rank(nickname: str) -> int | None:
+    user = fetch_one("SELECT coins FROM prophet_users WHERE nickname=?", (nickname,))
+    if not user:
+        return None
+    row = fetch_one(
+        "SELECT COUNT(*) + 1 AS rank FROM prophet_users WHERE coins > ?",
+        (int(user["coins"]),),
+    )
+    return int(row["rank"]) if row else None
+
+
 # ── Prediction items ──────────────────────────────────────────────────────────
 
 def get_item(item_key: str) -> dict[str, Any] | None:
