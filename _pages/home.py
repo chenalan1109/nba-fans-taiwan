@@ -143,7 +143,6 @@ def _render_season_status(phase: SeasonPhase, data_mode: str) -> None:
 
 
 def _render_bracket(series_list: list[dict[str, Any]]) -> None:
-    # Group by round_num (ascending), then by conference
     rounds: dict[int, list[dict[str, Any]]] = {}
     for s in series_list:
         rnd = s.get("round_num", 0)
@@ -151,33 +150,44 @@ def _render_bracket(series_list: list[dict[str, Any]]) -> None:
 
     round_labels = {1: "第一輪", 2: "分區準決賽", 3: "分區決賽", 4: "NBA Finals"}
 
-    for rnd in sorted(rounds.keys()):
+    def _is_round_active(series_in_round: list[dict[str, Any]]) -> bool:
+        return any(s.get("status") != "finished" for s in series_in_round)
+
+    sorted_rounds = sorted(rounds.keys())
+    active_rounds = sorted([r for r in sorted_rounds if _is_round_active(rounds[r])], reverse=True)
+    completed_rounds = sorted([r for r in sorted_rounds if not _is_round_active(rounds[r])], reverse=True)
+
+    for rnd in active_rounds:
         label = round_labels.get(rnd, f"第{rnd}輪")
         st.markdown(f"#### {label}")
-        series_in_round = rounds[rnd]
+        _render_round_content(rounds[rnd])
 
-        # Split Finals from conference series
-        finals = [s for s in series_in_round if s.get("conference") == "Finals"]
-        conf_series = [s for s in series_in_round if s.get("conference") != "Finals"]
+    for rnd in completed_rounds:
+        with st.expander(f"查看第{rnd}輪比賽結果"):
+            _render_round_content(rounds[rnd])
 
-        if finals:
-            for s in finals:
-                _render_series_card(s, width="full")
-        else:
-            east = [s for s in conf_series if s.get("conference") == "East"]
-            west = [s for s in conf_series if s.get("conference") == "West"]
-            max_len = max(len(east), len(west), 1)
-            col_e, col_w = st.columns(2)
-            with col_e:
-                if east:
-                    st.caption("🏀 東區")
-                    for s in east:
-                        _render_series_card(s)
-            with col_w:
-                if west:
-                    st.caption("🏀 西區")
-                    for s in west:
-                        _render_series_card(s)
+
+def _render_round_content(series_in_round: list[dict[str, Any]]) -> None:
+    finals = [s for s in series_in_round if s.get("conference") == "Finals"]
+    conf_series = [s for s in series_in_round if s.get("conference") != "Finals"]
+
+    if finals:
+        for s in finals:
+            _render_series_card(s, width="full")
+    else:
+        east = [s for s in conf_series if s.get("conference") == "East"]
+        west = [s for s in conf_series if s.get("conference") == "West"]
+        col_e, col_w = st.columns(2)
+        with col_e:
+            if east:
+                st.caption("🏀 東區")
+                for s in east:
+                    _render_series_card(s)
+        with col_w:
+            if west:
+                st.caption("🏀 西區")
+                for s in west:
+                    _render_series_card(s)
 
 
 def _render_series_card(series: dict[str, Any], width: str = "normal") -> None:

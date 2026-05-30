@@ -42,9 +42,6 @@ def render() -> None:
         _render_create_form(all_players)
 
     custom_matchup_list = get_custom_matchups()
-    with st.expander("🔑 管理員模式"):
-        _render_admin_panel(custom_matchup_list)
-
     matchups = get_seed_matchups() + custom_matchup_list
     custom_ids = {str(m["id"]) for m in custom_matchup_list}
     vote_counts = get_all_matchup_vote_counts()
@@ -53,7 +50,7 @@ def render() -> None:
 
     if len(matchups) > 1:
         titles = [str(m["title"]) for m in matchups]
-        selected_title = st.selectbox("選擇對決", titles, label_visibility="collapsed")
+        selected_title = st.selectbox("請選擇有興趣的對決組合", titles)
         matchup = next(m for m in matchups if str(m["title"]) == selected_title)
     else:
         matchup = matchups[0]
@@ -97,6 +94,10 @@ def render() -> None:
 
     with tab_vote:
         _render_vote_panel(str(matchup["id"]), team_a_name, team_b_name, is_custom)
+
+    st.divider()
+    with st.expander("🔑 管理員模式"):
+        _render_admin_panel(custom_matchup_list)
 
 
 def _render_team_cards(team_a: list[Player], team_b: list[Player], team_a_name: str, team_b_name: str) -> None:

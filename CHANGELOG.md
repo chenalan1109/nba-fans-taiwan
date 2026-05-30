@@ -1,5 +1,40 @@
 # NBA FANS TAIWAN — 改版紀錄
 
+## v2.1.0 — 2026-05-30（UI 美化）
+
+本次更新由 Claude Code 執行，涵蓋首頁比賽狀況排版改進、Matchup Debate 管理員模式位置調整、選單提示文字新增，共計修改 2 個檔案。
+
+### 1. 首頁「比賽狀況」排版調整（`_pages/home.py`）
+
+**改動說明：**
+- `_render_bracket()` 函數拆出 `_render_round_content()` 輔助函數，將每輪內容的渲染邏輯獨立。
+- 新增 `_is_round_active()` 內部函數：若某輪中任一系列賽 `status != "finished"`，則判定該輪「進行中」。
+- 渲染順序改為：進行中的輪次不加任何折疊、直接顯示在最上方；已結束的輪次以 `st.expander` 收起，按鈕名稱為「查看第{輪次數字}輪比賽結果」。
+- 同一類型（進行中 / 已結束）的多輪，以輪次數字由高到低排列（例如第三輪在第二輪之前）。
+
+**影響的資料流：**
+- 資料來源 `get_playoff_series()` 回傳結構不變，只改渲染層邏輯。
+- 若目前為季後賽且所有輪次均已結束，所有輪次都會以 expander 呈現。
+
+---
+
+### 2. Matchup Debate 管理員模式移到頁面最下方（`_pages/matchup_debate.py`）
+
+**改動說明：**
+- 原本「🔑 管理員模式」expander 位於「建立自訂對決」expander 正下方（頁面第二個區塊）。
+- 現在移到 `render()` 函數末尾，在所有對決內容（陣容卡、數據對比、球迷投票 tabs）之後，並加上 `st.divider()` 分隔線。
+- 功能不變，`_render_admin_panel(custom_matchup_list)` 呼叫及 `custom_matchup_list` 變數不受影響。
+
+---
+
+### 3. Matchup Debate 選單加上提示文字（`_pages/matchup_debate.py`）
+
+**改動說明：**
+- 原本 `st.selectbox("選擇對決", titles, label_visibility="collapsed")` 使用 `label_visibility="collapsed"` 隱藏標籤。
+- 改為 `st.selectbox("請選擇有興趣的對決組合", titles)`，顯示完整提示文字，引導用戶選擇對決組合。
+
+---
+
 ## v2.0.0 — 2026-05-30
 
 本次更新由 Claude Code 執行，涵蓋效能修正、帳號系統、Fantasy 球員市場、球員殿堂管理員功能，共計修改 9 個既有檔案、新增 3 個檔案。
