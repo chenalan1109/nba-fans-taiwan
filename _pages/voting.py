@@ -9,7 +9,7 @@ import streamlit as st
 from config.settings import get_runtime_settings
 from services.auth_service import is_admin_user
 from services import prophet_service as ps
-from services.cached import get_playoff_series, get_season_phase
+from services.cached import get_nba_team_names, get_playoff_series, get_season_phase, search_prophet_players
 from services.hall_service import (
     create_hall_poll,
     delete_hall_poll,
@@ -116,6 +116,26 @@ def render() -> None:
             ("已收到票數", str(total_votes), "全部主題加總"),
         ])
 
+    with st.expander("📖 先知幣系統說明", expanded=False):
+        st.markdown(
+            """
+**先知幣**是本站的預測積分貨幣，透過預測 NBA 賽事結果來賺取，可在「Fantasy Team → 球員市場」購買球員、組建夢幻陣容。
+
+| 預測類型 | 說明 | 最高可得 |
+|---|---|---|
+| ⚡ 即時預測 | 季後賽系列賽晉級預測，開賽前押注得分最高 | **200 先知幣** |
+| 🏆 長期預測 | MVP、總冠軍等年度獎項，賽季越早押注越多幣 | **1000 先知幣** |
+
+> **越早押注，幣越多！** 系列賽開打後仍可押注，但可得幣數較低。
+> 每日簽到可獲得 **150 先知幣**。
+
+先知幣用途：
+- 在「Fantasy Team → 球員市場」購買球員
+- 組建屬於自己的 5 人夢幻隊伍
+- 在「先知幣排行榜」挑戰其他球迷！
+            """
+        )
+
     tab_polls, tab_instant, tab_longterm, tab_records, tab_lb = st.tabs(
         ["🏛️ 球員殿堂", "⚡ 即時預測", "🏆 長期預測", "📋 我的紀錄", "🥇 排行榜"]
     )
@@ -177,7 +197,7 @@ def _render_hall_poll(poll: dict[str, Any], nickname: str) -> None:
                     key=f"hall_kw_input_{poll_key}",
                 )
                 st.session_state[f"hall_kw_{poll_key}"] = keyword
-                hits = ps.search_players(keyword) if len(keyword) >= 2 else []
+                hits = search_prophet_players(keyword) if len(keyword) >= 2 else []
                 if hits:
                     default_idx = hits.index(current_vote) if current_vote in hits else 0
                     choice = st.selectbox(
@@ -192,7 +212,7 @@ def _render_hall_poll(poll: dict[str, Any], nickname: str) -> None:
                     st.caption("輸入 2 個字以上開始搜尋。")
 
             elif poll_type == "team":
-                team_names = ps.get_nba_team_names()
+                team_names = get_nba_team_names()
                 default_idx = team_names.index(current_vote) if current_vote in team_names else 0
                 choice = st.selectbox(
                     "選擇球隊",
@@ -407,7 +427,7 @@ def _render_longterm_tab(nickname: str, season: str) -> None:
         st.info("長期預測項目尚未初始化，請稍後再試。")
         return
 
-    team_names = ps.get_nba_team_names()
+    team_names = get_nba_team_names()
     season_prefix = season + "_"
 
     for item in items:
@@ -467,7 +487,7 @@ def _render_longterm_tab(nickname: str, season: str) -> None:
                     )
                     st.session_state[f"kw_{item_key}"] = keyword
 
-                hits = ps.search_players(keyword) if len(keyword) >= 2 else []
+                hits = search_prophet_players(keyword) if len(keyword) >= 2 else []
                 default_pred = user_pred["prediction"] if user_pred else ""
 
                 with col_result:
@@ -582,7 +602,7 @@ def _render_admin_panel(season: str) -> None:
             st.info("本賽季所有長期預測均已結算。")
             return
 
-        team_names = ps.get_nba_team_names()
+        team_names = get_nba_team_names()
         season_prefix = season + "_"
 
         for item in items:
@@ -607,7 +627,7 @@ def _render_admin_panel(season: str) -> None:
                             placeholder="輸入姓名關鍵字",
                             key=f"admin_kw_{item_key}",
                         )
-                    hits = ps.search_players(kw) if len(kw) >= 2 else []
+                    hits = search_prophet_players(kw) if len(kw) >= 2 else []
                     with col_sel:
                         if hits:
                             answer = st.selectbox(

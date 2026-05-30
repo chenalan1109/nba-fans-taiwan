@@ -173,6 +173,14 @@ def _run_migrations(db_path: str | Path | None = None) -> None:
             "display_order INTEGER NOT NULL DEFAULT 0, "
             "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
         ),
+        (
+            "CREATE TABLE IF NOT EXISTS daily_checkins ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "username TEXT NOT NULL, "
+            "checkin_date TEXT NOT NULL, "
+            "coins_earned INTEGER NOT NULL DEFAULT 150, "
+            "UNIQUE (username, checkin_date))"
+        ),
     ]
     pg_migrations = [
         "ALTER TABLE polls ADD COLUMN IF NOT EXISTS correct_answer TEXT",
@@ -228,6 +236,14 @@ def _run_migrations(db_path: str | Path | None = None) -> None:
             "is_active INTEGER NOT NULL DEFAULT 1, "
             "display_order INTEGER NOT NULL DEFAULT 0, "
             "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+        ),
+        (
+            "CREATE TABLE IF NOT EXISTS daily_checkins ("
+            "id BIGSERIAL PRIMARY KEY, "
+            "username TEXT NOT NULL, "
+            "checkin_date TEXT NOT NULL, "
+            "coins_earned INTEGER NOT NULL DEFAULT 150, "
+            "UNIQUE (username, checkin_date))"
         ),
     ]
     stmts = pg_migrations if dsn else migrations

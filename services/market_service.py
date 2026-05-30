@@ -16,7 +16,7 @@ from services.player_service import calculate_fantasy_score
 def get_player_price(player: Player) -> int:
     """Calculate purchase price in prophet coins based on fantasy score."""
     score = calculate_fantasy_score(player)
-    return max(30, int(score * 5))
+    return max(30, int(score * 3))
 
 
 def get_user_coins(nickname: str, db_path: str | Path | None = None) -> int:

@@ -8,7 +8,7 @@ from database.seed_data import get_seed_matchups, get_seed_polls
 from models.player import Player
 from services.cached import get_game_boxscore, get_playoff_series, get_scoreboard, get_season_phase, get_standings
 from services.nba_api_service import get_data_mode
-from services.player_service import calculate_fantasy_score, get_featured_players, get_player_pool
+from services.player_service import calculate_fantasy_score, get_featured_players
 from services.season_service import SeasonPhase
 from ui.components import (
     render_feature_card,
@@ -89,11 +89,9 @@ def render() -> None:
     from services.season_service import get_current_season
     season = get_current_season()
 
-    pool_size = len(get_player_pool())
     matchup_count = len(get_seed_matchups())
     render_kpi_strip([
         ("賽季", season, phase.label()),
-        ("球員池", str(pool_size), "Fantasy Team 可選"),
         ("Matchup", str(matchup_count), "5v5 陣容辯論"),
         ("資料來源", "API + Seed", "雙模式 fallback"),
     ])

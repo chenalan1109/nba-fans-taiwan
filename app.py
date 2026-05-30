@@ -7,18 +7,19 @@ from database.db import init_db
 from services.auth_service import seed_admin_account
 from _pages import auth_page, fantasy_team, home, matchup_debate, player_stats, realtime_hub, voting
 from services import prophet_service as ps
+from services.checkin_service import can_checkin_today, do_checkin
 from services.nba_api_service import get_data_mode
 from ui.theme import inject_global_styles
 
 
 PAGES = {
     "首頁": home.render,
+    "登入/註冊": auth_page.render,
     "即時資訊牆": realtime_hub.render,
     "球員百科": player_stats.render,
     "球迷投票": voting.render,
     "Fantasy Team": fantasy_team.render,
     "Matchup Debate": matchup_debate.render,
-    "登入/註冊": auth_page.render,
 }
 
 
@@ -49,12 +50,22 @@ def main() -> None:
             prophet_user = ps.get_or_create_user(nickname)
             st.markdown(f"👤 **{user['username']}**")
             st.caption(f"暱稱：{nickname}　💰 {prophet_user['coins']} 先知幣")
+            if can_checkin_today(user["username"]):
+                if st.button("每日簽到 (+150 先知幣)", key="sidebar_checkin", use_container_width=True):
+                    ok, msg = do_checkin(user["username"], nickname)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.warning(msg)
+                    st.rerun()
+            else:
+                st.caption("✅ 今日已簽到")
             if st.button("登出", key="sidebar_logout"):
                 st.session_state.pop("logged_in_user", None)
                 st.session_state.pop("voter_id", None)
                 st.rerun()
         else:
-            st.caption("尚未登入，請前往「球迷投票」登入。")
+            st.caption("尚未登入，請前往登入。")
 
         st.divider()
         if "nav_target" in st.session_state:

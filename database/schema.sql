@@ -137,6 +137,15 @@ CREATE TABLE IF NOT EXISTS comment_likes (
     FOREIGN KEY (comment_id) REFERENCES game_comments(id)
 );
 
+-- Daily check-in log
+CREATE TABLE IF NOT EXISTS daily_checkins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    checkin_date TEXT NOT NULL,
+    coins_earned INTEGER NOT NULL DEFAULT 150,
+    UNIQUE (username, checkin_date)
+);
+
 -- Prophet coin prediction system
 CREATE TABLE IF NOT EXISTS prophet_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

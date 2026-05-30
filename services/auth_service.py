@@ -61,9 +61,9 @@ def register_user(
             (username, pw_hash, nickname),
             db_path=db_path,
         )
-        # Give the new user 500 prophet coins
+        # Give the new user 1000 prophet coins
         execute_query(
-            "INSERT OR IGNORE INTO prophet_users (nickname, coins) VALUES (?, 500)",
+            "INSERT OR IGNORE INTO prophet_users (nickname, coins) VALUES (?, 1000)",
             (nickname,),
             db_path=db_path,
         )
@@ -122,7 +122,7 @@ def seed_admin_account(db_path: str | Path | None = None) -> None:
             db_path=db_path,
         )
         execute_query(
-            "INSERT OR IGNORE INTO prophet_users (nickname, coins) VALUES (?, 500)",
+            "INSERT OR IGNORE INTO prophet_users (nickname, coins) VALUES (?, 1000)",
             (username,),
             db_path=db_path,
         )

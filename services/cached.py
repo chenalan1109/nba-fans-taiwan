@@ -9,7 +9,7 @@ from typing import Any
 
 import streamlit as st
 
-from services import nba_api_service, player_service, season_service
+from services import nba_api_service, player_service, prophet_service, season_service
 
 
 @st.cache_data(ttl=60)
@@ -60,3 +60,13 @@ def get_player_detail(player_id: int, data_mode: str) -> dict[str, Any]:
 @st.cache_data(ttl=600)
 def get_player_chart_data(player_id: int, data_mode: str) -> dict[str, Any]:
     return player_service.get_player_chart_data(player_id)
+
+
+@st.cache_data(ttl=86400)
+def get_nba_team_names() -> list[str]:
+    return prophet_service.get_nba_team_names()
+
+
+@st.cache_data(ttl=3600)
+def search_prophet_players(keyword: str) -> list[str]:
+    return prophet_service.search_players(keyword)

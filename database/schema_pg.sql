@@ -127,6 +127,14 @@ CREATE TABLE IF NOT EXISTS comment_likes (
     UNIQUE (comment_id, voter_id)
 );
 
+CREATE TABLE IF NOT EXISTS daily_checkins (
+    id BIGSERIAL PRIMARY KEY,
+    username TEXT NOT NULL,
+    checkin_date TEXT NOT NULL,
+    coins_earned INTEGER NOT NULL DEFAULT 150,
+    UNIQUE (username, checkin_date)
+);
+
 CREATE TABLE IF NOT EXISTS prophet_users (
     id BIGSERIAL PRIMARY KEY,
     nickname TEXT UNIQUE NOT NULL,
