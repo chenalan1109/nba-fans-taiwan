@@ -9,7 +9,6 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from config.settings import get_admin_password, get_admin_username
 from database.db import execute_query, fetch_one
 
 
@@ -103,6 +102,7 @@ def get_account(username: str, db_path: str | Path | None = None) -> dict[str, A
 
 def is_admin_user(user: dict[str, Any] | None) -> bool:
     """Return True if the logged-in user is the configured admin account."""
+    from config.settings import get_admin_username
     if not user:
         return False
     return str(user.get("username", "")).lower() == get_admin_username().lower()
@@ -110,6 +110,7 @@ def is_admin_user(user: dict[str, Any] | None) -> bool:
 
 def seed_admin_account(db_path: str | Path | None = None) -> None:
     """Create the admin account on first run if it doesn't already exist."""
+    from config.settings import get_admin_password, get_admin_username
     username = get_admin_username()
     if fetch_one("SELECT id FROM user_accounts WHERE username = ?", (username,), db_path=db_path):
         return
