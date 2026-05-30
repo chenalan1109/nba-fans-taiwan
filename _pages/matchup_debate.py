@@ -128,28 +128,7 @@ def _render_compare(team_a: list[Player], team_b: list[Player], team_a_name: str
 
 
 def _render_vote_panel(matchup_id: str, team_a_name: str, team_b_name: str, is_custom: bool = False) -> None:
-    voter_id = st.text_input(
-        "投票暱稱",
-        value=st.session_state.get("matchup_voter_id", ""),
-        placeholder="例如 Maurice",
-    ).strip()
-    st.session_state["matchup_voter_id"] = voter_id
-
-    already_voted = has_voted_matchup(matchup_id, voter_id) if voter_id else False
-    selected_side = get_matchup_selected_side(matchup_id, voter_id) if voter_id else None
-
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button(f"支持 {team_a_name}", disabled=not voter_id or already_voted, use_container_width=True):
-            _submit_vote(matchup_id, voter_id, "A")
-    with col_b:
-        if st.button(f"支持 {team_b_name}", disabled=not voter_id or already_voted, use_container_width=True):
-            _submit_vote(matchup_id, voter_id, "B")
-
-    if already_voted:
-        voted_name = team_a_name if selected_side == "A" else team_b_name
-        st.success(f"你已投票：{voted_name}")
-
+    # Show vote summary publicly
     summary = get_matchup_vote_summary(matchup_id)
     total = summary["A"] + summary["B"]
     if total == 0:
@@ -158,7 +137,32 @@ def _render_vote_panel(matchup_id: str, team_a_name: str, team_b_name: str, is_c
         fig = vote_donut_chart([team_a_name, team_b_name], [summary["A"], summary["B"]])
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    if is_custom and voter_id:
+    user = st.session_state.get("logged_in_user")
+    voter_id = user["nickname"] if user else ""
+
+    if not voter_id:
+        st.info("登入後即可投票。")
+        if st.button("前往登入/註冊", key=f"matchup_go_login_{matchup_id}", type="primary"):
+            st.session_state["main_nav"] = "登入/註冊"
+            st.rerun()
+        return
+
+    already_voted = has_voted_matchup(matchup_id, voter_id)
+    selected_side = get_matchup_selected_side(matchup_id, voter_id)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button(f"支持 {team_a_name}", disabled=already_voted, use_container_width=True):
+            _submit_vote(matchup_id, voter_id, "A")
+    with col_b:
+        if st.button(f"支持 {team_b_name}", disabled=already_voted, use_container_width=True):
+            _submit_vote(matchup_id, voter_id, "B")
+
+    if already_voted:
+        voted_name = team_a_name if selected_side == "A" else team_b_name
+        st.success(f"你已投票：{voted_name}")
+
+    if is_custom:
         creator_id = get_matchup_creator(matchup_id)
         if creator_id and voter_id.strip().lower() == creator_id.strip().lower():
             st.divider()
@@ -178,16 +182,21 @@ def _submit_vote(matchup_id: str, voter_id: str, selected_side: str) -> None:
 
 
 def _render_create_form(seed_players: list[Player]) -> None:
+    user = st.session_state.get("logged_in_user")
+    if not user:
+        st.info("登入後即可建立自訂對決。")
+        if st.button("前往登入/註冊", key="debate_create_go_login", type="primary"):
+            st.session_state["main_nav"] = "登入/註冊"
+            st.rerun()
+        return
+
+    creator_id = user["nickname"]
+
     if "cm_created_msg" in st.session_state:
         st.success(st.session_state.pop("cm_created_msg"))
 
+    st.caption(f"建立者：**{creator_id}**（使用登入帳號的暱稱）")
     title = st.text_input("對決標題", placeholder="例如：Knicks vs Cavaliers Finals", key="cm_title")
-    creator_id = st.text_input(
-        "建立者暱稱",
-        value=st.session_state.get("matchup_voter_id", ""),
-        placeholder="例如 Maurice（用於識別建立者，之後可刪除自己的對決）",
-        key="cm_creator_id",
-    ).strip()
     col_a, col_b = st.columns(2)
 
     with col_a:
@@ -206,8 +215,6 @@ def _render_create_form(seed_players: list[Player]) -> None:
         errors: list[str] = []
         if not title.strip():
             errors.append("請輸入對決標題。")
-        if not creator_id:
-            errors.append("請輸入建立者暱稱。")
         if not team_a_name.strip():
             errors.append("請輸入藍隊名稱。")
         if not team_b_name.strip():
@@ -231,7 +238,7 @@ def _render_create_form(seed_players: list[Player]) -> None:
         else:
             save_custom_matchup(title, team_a_name, team_b_name, team_a_players, team_b_players, creator_id)
             st.session_state["cm_created_msg"] = f"對決「{title.strip()}」已建立！"
-            for k in ["cm_title", "cm_a_name", "cm_b_name", "cm_search_a", "cm_search_b", "cm_a_players", "cm_b_players", "cm_creator_id"]:
+            for k in ["cm_title", "cm_a_name", "cm_b_name", "cm_search_a", "cm_search_b", "cm_a_players", "cm_b_players"]:
                 st.session_state.pop(k, None)
             st.rerun()
 

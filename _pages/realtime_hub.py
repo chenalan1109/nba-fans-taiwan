@@ -154,15 +154,8 @@ def _render_rating_section(players: list[dict[str, Any]], game_id: str = "", sid
     render_section("球員評分")
 
     scope = f"{game_id}_{side}" if game_id else "_".join(str(p.get("player_id", 0)) for p in players)
-    voter_id = st.text_input(
-        "評分暱稱",
-        value=st.session_state.get("voter_id", ""),
-        placeholder="例如 Maurice",
-        key=f"rating_voter_{scope}",
-        help="同一暱稱對同一球員只能評分一次。",
-    ).strip()
-    if voter_id:
-        st.session_state["voter_id"] = voter_id
+    logged_user = st.session_state.get("logged_in_user")
+    voter_id = logged_user["nickname"] if logged_user else ""
 
     player_ids = [int(p.get("player_id") or 0) for p in players if p.get("player_id")]
     ratings_map = get_ratings_for_players(player_ids)
@@ -203,7 +196,10 @@ def _render_rating_section(players: list[dict[str, Any]], game_id: str = "", sid
             unsafe_allow_html=True,
         )
 
-        already_rated = has_rated_player(pid, voter_id) if voter_id else False
+        if not voter_id:
+            continue
+
+        already_rated = has_rated_player(pid, voter_id)
         if already_rated:
             my_rating = get_player_rating(pid, voter_id)
             stars = _STARS[(my_rating or 1) - 1]
@@ -224,7 +220,7 @@ def _render_rating_section(players: list[dict[str, Any]], game_id: str = "", sid
                 )
             with col_btn:
                 st.write("")
-                if st.button("送出", key=f"rate_btn_{scope}_{pid}", disabled=not voter_id):
+                if st.button("送出", key=f"rate_btn_{scope}_{pid}"):
                     rating_val = _STAR_MAP.get(str(choice), 3)
                     if submit_player_rating(pid, voter_id, rating_val):
                         st.success("評分成功！")
@@ -232,19 +228,24 @@ def _render_rating_section(players: list[dict[str, Any]], game_id: str = "", sid
                     else:
                         st.error("評分失敗，請確認暱稱是否已評分過此球員。")
 
+    if not voter_id:
+        st.info("登入後即可為球員評分。")
+        if st.button("前往登入/註冊", key=f"go_login_rate_{scope}", type="primary"):
+            st.session_state["main_nav"] = "登入/註冊"
+            st.rerun()
+
 
 def _render_referee_vote_section(game_id: str, home_team: str, away_team: str) -> None:
     render_section("裁判執法評分")
-    st.caption("針對這場比賽的裁判評分，沿用上方球員評分的暱稱，同一暱稱對同一裁判只能評分一次。")
+    st.caption("針對這場比賽的裁判評分，同一帳號對同一裁判只能評分一次。")
 
     officials = get_game_officials(game_id, data_mode=get_data_mode())
     if not officials:
         st.info("裁判資料尚無法取得，請稍後再試。")
         return
 
-    voter_id = st.session_state.get("voter_id", "")
-    if not voter_id:
-        st.info("請先在上方輸入暱稱才能評分。")
+    logged_user = st.session_state.get("logged_in_user")
+    voter_id = logged_user["nickname"] if logged_user else ""
 
     ref_ids = [_referee_id(game_id, o["name"]) for o in officials]
     ratings_map = get_ratings_for_players(ref_ids)
@@ -264,7 +265,10 @@ def _render_referee_vote_section(game_id: str, home_team: str, away_team: str) -
             unsafe_allow_html=True,
         )
 
-        already_rated = has_rated_player(rid, voter_id) if voter_id else False
+        if not voter_id:
+            continue
+
+        already_rated = has_rated_player(rid, voter_id)
         if already_rated:
             my_rating = get_player_rating(rid, voter_id)
             stars = _STARS[(my_rating or 1) - 1]
@@ -285,13 +289,19 @@ def _render_referee_vote_section(game_id: str, home_team: str, away_team: str) -
                 )
             with col_btn:
                 st.write("")
-                if st.button("送出", key=f"ref_rate_btn_{rid}", disabled=not voter_id):
+                if st.button("送出", key=f"ref_rate_btn_{rid}"):
                     rating_val = _STAR_MAP.get(str(choice), 3)
                     if submit_player_rating(rid, voter_id, rating_val):
                         st.success("評分成功！")
                         st.rerun()
                     else:
-                        st.error("評分失敗，請確認暱稱是否已評分過此裁判。")
+                        st.error("評分失敗，請確認是否已評分過此裁判。")
+
+    if not voter_id:
+        st.info("登入後即可為裁判評分。")
+        if st.button("前往登入/註冊", key=f"go_login_ref_{game_id}", type="primary"):
+            st.session_state["main_nav"] = "登入/註冊"
+            st.rerun()
 
 
 def _render_comment_expander(game: dict[str, object]) -> None:
@@ -304,18 +314,9 @@ def _render_comment_expander(game: dict[str, object]) -> None:
     label = f"💬 留言討論（{count}）" if count else "💬 留言討論"
 
     with st.expander(label, expanded=False):
-        # Nickname input (shared with rating section via session_state)
-        voter_id = st.text_input(
-            "暱稱",
-            value=st.session_state.get("voter_id", ""),
-            placeholder="輸入暱稱後即可留言與按讚",
-            key=f"comment_voter_{game_id}",
-            label_visibility="collapsed",
-        ).strip()
-        if voter_id:
-            st.session_state["voter_id"] = voter_id
+        logged_user = st.session_state.get("logged_in_user")
+        voter_id = logged_user["nickname"] if logged_user else ""
 
-        # Comment input
         if voter_id:
             new_comment = st.text_area(
                 "留言",
@@ -334,7 +335,10 @@ def _render_comment_expander(game: dict[str, object]) -> None:
                 else:
                     st.warning("留言內容不可為空。")
         else:
-            st.caption("請輸入暱稱後即可留言與按讚。")
+            st.info("登入後即可留言與按讚。")
+            if st.button("前往登入/註冊", key=f"go_login_comment_{game_id}", type="primary"):
+                st.session_state["main_nav"] = "登入/註冊"
+                st.rerun()
 
         st.divider()
 

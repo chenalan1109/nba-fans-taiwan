@@ -43,13 +43,8 @@ def render() -> None:
     )
 
     user = _current_user()
-    if not user:
-        st.warning("請先登入帳號才能使用 Fantasy Team 功能。")
-        st.info("在「球迷投票」頁面可以登入或註冊帳號。")
-        return
-
-    username: str = user["username"]
-    nickname: str = user["nickname"]
+    username: str = user["username"] if user else ""
+    nickname: str = user["nickname"] if user else ""
 
     tab_market, tab_pool, tab_team = st.tabs(["🛒 球員市場", "🎒 我的球員池", "🏀 組建 Fantasy Team"])
 
@@ -65,11 +60,12 @@ def render() -> None:
 
 def _render_market(username: str, nickname: str) -> None:
     render_section("球員市場")
-    coins = market_service.get_user_coins(nickname)
-    owned_ids = market_service.get_user_player_pool_ids(username)
+    coins = market_service.get_user_coins(nickname) if username else 0
+    owned_ids = market_service.get_user_player_pool_ids(username) if username else set()
     all_players = get_player_pool()
 
-    st.markdown(f"💰 先知幣餘額：**{coins}** 枚")
+    if username:
+        st.markdown(f"💰 先知幣餘額：**{coins}** 枚")
     st.caption("購買球員後，球員進入你的球員池，可用於組建 Fantasy Team。定價依球員數據計算。")
 
     col_kw, col_team, col_pos = st.columns(3)
@@ -99,7 +95,9 @@ def _render_market(username: str, nickname: str) -> None:
                     fantasy_score=calculate_fantasy_score(player),
                     salary=calculate_player_salary(player),
                 )
-                if already_owned:
+                if not username:
+                    st.caption(f"💰 {price} 先知幣")
+                elif already_owned:
                     st.success("✓ 已擁有")
                 elif st.button(
                     f"購買 {price} 先知幣",
@@ -116,11 +114,25 @@ def _render_market(username: str, nickname: str) -> None:
                     else:
                         st.error(msg)
 
+    if not username:
+        st.divider()
+        st.info("登入後即可購買球員。")
+        if st.button("前往登入/註冊", key="market_go_login", type="primary"):
+            st.session_state["main_nav"] = "登入/註冊"
+            st.rerun()
+
 
 # ── Pool tab ──────────────────────────────────────────────────────────────────
 
 def _render_pool(username: str, nickname: str) -> None:
     render_section("我的球員池")
+    if not username:
+        st.info("登入後即可查看你的球員池。")
+        if st.button("前往登入/註冊", key="pool_go_login", type="primary"):
+            st.session_state["main_nav"] = "登入/註冊"
+            st.rerun()
+        return
+
     coins = market_service.get_user_coins(nickname)
     st.markdown(f"💰 先知幣餘額：**{coins}** 枚")
 
@@ -148,6 +160,12 @@ def _render_pool(username: str, nickname: str) -> None:
 
 def _render_team_builder(username: str, nickname: str) -> None:
     render_section("組建 Fantasy Team")
+    if not username:
+        st.info("登入後即可組建 Fantasy Team。")
+        if st.button("前往登入/註冊", key="team_go_login", type="primary"):
+            st.session_state["main_nav"] = "登入/註冊"
+            st.rerun()
+        return
 
     owned_ids = market_service.get_user_player_pool_ids(username)
     if not owned_ids:
