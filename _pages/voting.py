@@ -8,19 +8,25 @@ from typing import Any
 import streamlit as st
 
 from config.settings import get_runtime_settings
-from services import prophet_service as ps
+from services import auth_service, prophet_service as ps
 from services.cached import get_playoff_series, get_season_phase
-from services.hall_service import HALL_POLLS, get_hall_distribution, get_hall_ranking, get_hall_vote, upsert_hall_vote
+from services.hall_service import (
+    create_hall_poll,
+    delete_hall_poll,
+    get_hall_distribution,
+    get_hall_polls,
+    get_hall_ranking,
+    get_hall_vote,
+    list_all_hall_polls,
+    restore_hall_poll,
+    upsert_hall_vote,
+)
 from services.nba_api_service import get_data_mode
 from services.season_service import SeasonPhase, get_current_season
 from services.vote_service import (
     ensure_playoff_polls,
-    get_completed_polls,
-    get_selected_option,
-    get_vote_summary,
-    has_voted,
+    get_total_active_votes,
     list_active_polls,
-    submit_vote,
 )
 from ui.charts import vote_donut_chart
 from ui.components import render_kpi_strip, render_page_header, render_section
@@ -30,6 +36,53 @@ _ROUND_ZH: dict[int, str] = {
 }
 
 
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+
+def _current_user() -> dict[str, Any] | None:
+    return st.session_state.get("logged_in_user")
+
+
+def _nickname() -> str:
+    user = _current_user()
+    return user["nickname"] if user else ""
+
+
+def _render_auth_panel() -> None:
+    """Show login/register panel and return once authenticated."""
+    st.info("請先登入或註冊帳號，才能投票和預測。")
+    tab_login, tab_register = st.tabs(["登入", "註冊"])
+
+    with tab_login:
+        username = st.text_input("帳號", key="login_username", placeholder="輸入帳號").strip()
+        password = st.text_input("密碼", type="password", key="login_password").strip()
+        if st.button("登入", key="btn_login", use_container_width=True):
+            if not username or not password:
+                st.warning("請輸入帳號與密碼。")
+            else:
+                user = auth_service.login_user(username, password)
+                if user:
+                    st.session_state["logged_in_user"] = user
+                    st.session_state["voter_id"] = user["nickname"]
+                    st.rerun()
+                else:
+                    st.error("帳號或密碼錯誤。")
+
+    with tab_register:
+        new_username = st.text_input("帳號（4–30字元）", key="reg_username", placeholder="設定登入帳號").strip()
+        new_nickname = st.text_input("暱稱（公開顯示）", key="reg_nickname", placeholder="設定你的暱稱").strip()
+        new_password = st.text_input("密碼（至少4字元）", type="password", key="reg_password").strip()
+        new_password2 = st.text_input("確認密碼", type="password", key="reg_password2").strip()
+        if st.button("建立帳號", key="btn_register", use_container_width=True):
+            if new_password != new_password2:
+                st.error("兩次密碼不一致。")
+            else:
+                ok, msg = auth_service.register_user(new_username, new_password, new_nickname)
+                if ok:
+                    st.success("帳號建立成功！請切換到「登入」頁面登入。")
+                else:
+                    st.error(msg)
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def render() -> None:
@@ -37,50 +90,60 @@ def render() -> None:
         "球迷投票 · 先知幣預測",
         "投票、押注、競猜，一站完成。越早押注先知幣越多。",
     )
-    ensure_playoff_polls()
 
     season = get_current_season()
-    ps.init_prophet(season)
-
     data_mode = get_data_mode()
     phase = SeasonPhase(get_season_phase(data_mode))
     series_list: list[dict[str, Any]] = []
     if phase in (SeasonPhase.PLAYOFFS, SeasonPhase.PLAY_IN):
         series_list = get_playoff_series(data_mode)
+
+    ps.init_prophet(season)
+    ensure_playoff_polls(phase=phase.value, series_list=series_list)
+
+    if phase in (SeasonPhase.PLAYOFFS, SeasonPhase.PLAY_IN):
         ps.sync_instant_items(series_list, season)
         ps.settle_finished_series(series_list, season)
 
     _render_runtime_notice()
 
-    nickname = st.text_input(
-        "暱稱",
-        value=st.session_state.get("voter_id", ""),
-        placeholder="輸入暱稱（投票與先知幣共用，跨次保留記錄）",
-        help="同一暱稱在同一投票只能投一次；先知幣與暱稱永久綁定。",
-    ).strip()
-    st.session_state["voter_id"] = nickname
+    user = _current_user()
+    nickname = _nickname()
 
-    polls = [p for p in list_active_polls() if p["category"] != "referee"]
-    total_votes = sum(sum(get_vote_summary(int(p["id"])).values()) for p in polls)
-
-    if nickname:
-        user = ps.get_or_create_user(nickname)
-        lb_full = ps.get_leaderboard(200)
-        rank = next((i + 1 for i, u in enumerate(lb_full) if u["nickname"] == nickname), "—")
-        all_preds = ps.get_user_all_predictions(nickname, season)
-        correct = sum(1 for p in all_preds if p.get("coins_earned", 0) > 0)
-        render_kpi_strip([
-            ("先知幣", str(user["coins"]), "累積總數"),
-            ("排名", f"#{rank}", "全體預測者"),
-            ("命中", str(correct), f"共 {len(all_preds)} 筆預測"),
-            ("投票主題", str(len(polls)), f"{total_votes} 票"),
-        ])
+    # Sidebar-style user bar
+    if user:
+        prophet_user = ps.get_or_create_user(nickname)
+        col_info, col_logout = st.columns([4, 1])
+        col_info.markdown(f"👤 **{user['username']}**（暱稱：{nickname}）　💰 先知幣：**{prophet_user['coins']}**")
+        if col_logout.button("登出", key="btn_logout"):
+            st.session_state.pop("logged_in_user", None)
+            st.session_state.pop("voter_id", None)
+            st.rerun()
     else:
+        _render_auth_panel()
+        # Still show public KPI while not logged in
+        polls = [p for p in list_active_polls() if p["category"] != "referee"]
+        total_votes = get_total_active_votes()
         render_kpi_strip([
             ("投票主題", str(len(polls)), "Active"),
             ("已收到票數", str(total_votes), "全部主題加總"),
         ])
-        st.info("請輸入暱稱後開始押注與投票，先知幣與你的暱稱永久綁定。")
+        return
+
+    # ── Logged-in view ────────────────────────────────────────────────────────
+    polls = [p for p in list_active_polls() if p["category"] != "referee"]
+    total_votes = get_total_active_votes()
+
+    lb_full = ps.get_leaderboard(200)
+    rank = next((i + 1 for i, u in enumerate(lb_full) if u["nickname"] == nickname), "—")
+    all_preds = ps.get_user_all_predictions(nickname, season)
+    correct = sum(1 for p in all_preds if p.get("coins_earned", 0) > 0)
+    render_kpi_strip([
+        ("先知幣", str(prophet_user["coins"]), "累積總數"),
+        ("排名", f"#{rank}", "全體預測者"),
+        ("命中", str(correct), f"共 {len(all_preds)} 筆預測"),
+        ("投票主題", str(len(polls)), f"{total_votes} 票"),
+    ])
 
     tab_polls, tab_instant, tab_longterm, tab_records, tab_lb = st.tabs(
         ["🏛️ 球員殿堂", "⚡ 即時預測", "🏆 長期預測", "📋 我的紀錄", "🥇 排行榜"]
@@ -104,13 +167,18 @@ def _render_hall_tab(nickname: str) -> None:
     render_section("球員殿堂")
     st.caption("沒有正確答案、不結算先知幣。純粹表達你的立場與熱情，看看自己跟大家的品味差多遠。")
 
-    tab_labels = [p["title"] for p in HALL_POLLS]
-    sub_tabs = st.tabs(tab_labels)
+    hall_polls = get_hall_polls()
+    if not hall_polls:
+        st.info("目前沒有投票主題，請聯絡管理員新增。")
+    else:
+        tab_labels = [p["title"] for p in hall_polls]
+        sub_tabs = st.tabs(tab_labels)
+        for tab, poll in zip(sub_tabs, hall_polls):
+            with tab:
+                st.caption(str(poll["subtitle"]))
+                _render_hall_poll(poll, nickname)
 
-    for tab, poll in zip(sub_tabs, HALL_POLLS):
-        with tab:
-            st.caption(str(poll["subtitle"]))
-            _render_hall_poll(poll, nickname)
+    _render_hall_admin_panel()
 
 
 def _render_hall_poll(poll: dict[str, Any], nickname: str) -> None:
@@ -169,17 +237,14 @@ def _render_hall_poll(poll: dict[str, Any], nickname: str) -> None:
                 horizontal=False,
             )
 
-        if not nickname:
-            st.caption("請先輸入暱稱才能投票。")
-        else:
-            btn_label = "更改選擇" if current_vote else "送出"
-            if choice and st.button(btn_label, key=f"hall_btn_{poll_key}", use_container_width=True):
-                if upsert_hall_vote(poll_key, nickname, str(choice)):
-                    if poll_type == "player":
-                        st.session_state.pop(f"hall_kw_{poll_key}", None)
-                    st.rerun()
-                else:
-                    st.error("送出失敗，請稍後再試。")
+        btn_label = "更改選擇" if current_vote else "送出"
+        if choice and st.button(btn_label, key=f"hall_btn_{poll_key}", use_container_width=True):
+            if upsert_hall_vote(poll_key, nickname, str(choice)):
+                if poll_type == "player":
+                    st.session_state.pop(f"hall_kw_{poll_key}", None)
+                st.rerun()
+            else:
+                st.error("送出失敗，請稍後再試。")
 
     with col_chart:
         _render_hall_chart(poll_key)
@@ -203,6 +268,63 @@ def _render_hall_chart(poll_key: str) -> None:
             import pandas as pd
             df = pd.DataFrame(ranking)
             st.dataframe(df, use_container_width=True, hide_index=True)
+
+
+# ── Hall admin panel ───────────────────────────────────────────────────────────
+
+def _render_hall_admin_panel() -> None:
+    st.divider()
+    with st.expander("🔑 球員殿堂管理員（新增 / 刪除投票主題）"):
+        pwd = st.text_input("管理員密碼", type="password", key="hall_admin_pwd")
+        expected = os.getenv("PROPHET_ADMIN_PASSWORD", "admin")
+        if not pwd:
+            st.caption("輸入密碼後解鎖管理功能。")
+            return
+        if pwd != expected:
+            st.error("密碼錯誤。")
+            return
+
+        st.success("已驗證，可管理投票主題。")
+
+        # List existing polls with toggle/delete
+        st.markdown("**現有投票主題**")
+        all_polls = list_all_hall_polls()
+        for p in all_polls:
+            col_info, col_action = st.columns([3, 1])
+            status_icon = "🟢" if int(p["is_active"]) else "⛔"
+            col_info.markdown(f"{status_icon} **{p['title']}** `{p['poll_key']}` ({p['poll_type']})")
+            if int(p["is_active"]):
+                if col_action.button("停用", key=f"hall_del_{p['poll_key']}", use_container_width=True):
+                    ok, msg = delete_hall_poll(str(p["poll_key"]))
+                    st.success(msg) if ok else st.error(msg)
+                    st.rerun()
+            else:
+                if col_action.button("恢復", key=f"hall_restore_{p['poll_key']}", use_container_width=True):
+                    ok, msg = restore_hall_poll(str(p["poll_key"]))
+                    st.success(msg) if ok else st.error(msg)
+                    st.rerun()
+
+        st.divider()
+        st.markdown("**新增投票主題**")
+        new_key = st.text_input("Poll Key（英文，唯一識別碼）", key="hall_new_key", placeholder="如 best_defender")
+        new_title = st.text_input("標題", key="hall_new_title", placeholder="如 史上最強防守者")
+        new_subtitle = st.text_input("副標題", key="hall_new_subtitle", placeholder="如 你認為誰是史上最強防守球員？")
+        new_type = st.selectbox("類型", ["player", "team", "custom"], key="hall_new_type")
+
+        new_options_raw = ""
+        if new_type == "custom":
+            new_options_raw = st.text_area(
+                "選項（每行一個）",
+                key="hall_new_options",
+                placeholder="Option A\nOption B\nOption C",
+            )
+
+        if st.button("新增投票主題", key="hall_add_btn", use_container_width=True):
+            options_list = [o.strip() for o in new_options_raw.strip().splitlines() if o.strip()] if new_type == "custom" else None
+            ok, msg = create_hall_poll(new_key, new_title, new_subtitle, new_type, options_list)
+            st.success(msg) if ok else st.error(msg)
+            if ok:
+                st.rerun()
 
 
 # ── Tab: 即時預測 ─────────────────────────────────────────────────────────────
@@ -259,7 +381,6 @@ def _render_instant_item(
                     st.markdown(f"❌ 你押的是：{user_pred['prediction']}（未命中）")
             return
 
-        # open or locked — both allow predictions; locked just yields fewer coins
         is_locked = status == "locked"
         score = ""
         if series:
@@ -269,10 +390,6 @@ def _render_instant_item(
 
         if is_locked:
             st.caption("系列賽進行中，仍可押注，但幣數較低。")
-
-        if not nickname:
-            st.caption("請先輸入暱稱才能下注。")
-            return
 
         default_idx = 0
         if user_pred and user_pred["prediction"] in options:
@@ -355,10 +472,6 @@ def _render_longterm_tab(nickname: str, season: str) -> None:
                 st.caption("此項目已鎖定，無法更改預測。")
                 continue
 
-            if not nickname:
-                st.caption("請先輸入暱稱。")
-                continue
-
             if suffix == "champion":
                 choice: str | None = st.selectbox(
                     "選擇隊伍",
@@ -428,7 +541,7 @@ def _render_longterm_tab(nickname: str, season: str) -> None:
 def _render_records_tab(nickname: str, season: str) -> None:
     render_section("我的預測紀錄")
     if not nickname:
-        st.info("請先輸入暱稱。")
+        st.info("請先登入。")
         return
 
     preds = ps.get_user_all_predictions(nickname, season)

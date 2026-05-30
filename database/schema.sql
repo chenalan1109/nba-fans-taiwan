@@ -6,6 +6,38 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Full account system with password auth
+CREATE TABLE IF NOT EXISTS user_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    nickname TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Player marketplace: each username owns a pool of purchased players
+CREATE TABLE IF NOT EXISTS user_player_pool (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    player_id INTEGER NOT NULL,
+    player_name TEXT NOT NULL,
+    purchased_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (username, player_id)
+);
+
+-- Hall of Fame poll definitions managed via DB (admin can add/remove)
+CREATE TABLE IF NOT EXISTS hall_poll_definitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    poll_key TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    subtitle TEXT NOT NULL,
+    poll_type TEXT NOT NULL CHECK (poll_type IN ('player', 'team', 'custom')),
+    options_json TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS polls (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,

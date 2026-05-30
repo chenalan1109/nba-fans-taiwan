@@ -13,47 +13,65 @@ _last_refresh: float = 0.0
 _REFRESH_INTERVAL: float = 3600.0  # refresh at most once per hour
 _cached_phase: str = ""
 
+_last_game_poll_refresh: float = 0.0
+_GAME_POLL_INTERVAL: float = 3600.0  # ensure_tomorrow_game_polls at most once per hour
+
 # Series confirmed as concluded — skip even if API reports them as still active
 _COMPLETED_SERIES: frozenset[frozenset[str]] = frozenset({
     frozenset({"Oklahoma City Thunder", "San Antonio Spurs"}),
 })
 
 
-def ensure_playoff_polls(db_path: str | Path | None = None) -> str:
+def ensure_playoff_polls(
+    db_path: str | Path | None = None,
+    phase: str | None = None,
+    series_list: list[dict[str, Any]] | None = None,
+) -> str:
     """Main entry point for voting page.
 
-    Detects current season phase and generates appropriate polls.
-    Rate-limited to one API call per hour. Returns the current phase string.
+    Accepts pre-fetched phase/series_list from the page (already cached via
+    st.cache_data) to avoid redundant NBA API calls. Falls back to direct
+    service calls if not provided. Rate-limited to once per hour.
+    Returns the current phase string.
     """
     global _last_refresh, _cached_phase
 
-    ensure_tomorrow_game_polls(db_path)
+    global _last_game_poll_refresh
+    now_ts = time.time()
+    if now_ts - _last_game_poll_refresh >= _GAME_POLL_INTERVAL:
+        ensure_tomorrow_game_polls(db_path)
+        _last_game_poll_refresh = now_ts
 
     now = time.time()
     if now - _last_refresh < _REFRESH_INTERVAL:
         return _cached_phase
     _last_refresh = now
 
-    from services.season_service import SeasonPhase, detect_season_phase, get_playoff_series
-    phase = detect_season_phase()
-    _cached_phase = phase.value
+    from services.season_service import SeasonPhase as _Phase, detect_season_phase, get_playoff_series
 
-    if phase == SeasonPhase.PLAYOFFS:
+    if phase is not None:
+        _cached_phase = phase
+        current_phase = _Phase(phase)
+    else:
+        current_phase = detect_season_phase()
+        _cached_phase = current_phase.value
+
+    if current_phase == _Phase.PLAYOFFS:
         _deactivate_completed_series_polls(db_path)
-        series_list = get_playoff_series()
-        _complete_finished_polls(series_list, db_path)
-        active_series = [s for s in series_list if s["status"] == "ongoing"]
+        resolved = series_list if series_list is not None else get_playoff_series()
+        _complete_finished_polls(resolved, db_path)
+        active_series = [s for s in resolved if s["status"] == "ongoing"]
         if active_series:
             _sync_series_polls_from_season(active_series, db_path)
         else:
             _ensure_champion_polls(db_path)
-    elif phase == SeasonPhase.PLAY_IN:
+    elif current_phase == _Phase.PLAY_IN:
         _deactivate_nongame_polls(db_path)
         _ensure_playin_polls(db_path)
-    elif phase == SeasonPhase.REGULAR_SEASON:
+    elif current_phase == _Phase.REGULAR_SEASON:
         _deactivate_nongame_polls(db_path)
         _ensure_regular_season_polls(db_path)
-    elif phase == SeasonPhase.OFF_SEASON:
+    elif current_phase == _Phase.OFF_SEASON:
         _deactivate_nongame_polls(db_path)
 
     return _cached_phase
@@ -454,23 +472,33 @@ def create_poll(
 
 
 def list_active_polls(db_path: str | Path | None = None) -> list[dict[str, Any]]:
-    rows = fetch_all(
-        """
-        SELECT id, title, category
-        FROM polls
-        WHERE is_active = 1
-        ORDER BY id
-        """,
+    poll_rows = fetch_all(
+        "SELECT id, title, category FROM polls WHERE is_active = 1 ORDER BY id",
         db_path=db_path,
     )
+    if not poll_rows:
+        return []
+
+    # Fetch all options in one query to avoid N+1
+    poll_ids = [int(r["id"]) for r in poll_rows]
+    placeholders = ",".join("?" * len(poll_ids))
+    option_rows = fetch_all(
+        f"SELECT poll_id, option_text FROM poll_options WHERE poll_id IN ({placeholders}) ORDER BY id",
+        tuple(poll_ids),
+        db_path=db_path,
+    )
+    options_by_poll: dict[int, list[str]] = {pid: [] for pid in poll_ids}
+    for opt in option_rows:
+        options_by_poll[int(opt["poll_id"])].append(str(opt["option_text"]))
+
     return [
         {
             "id": int(row["id"]),
             "title": str(row["title"]),
             "category": str(row["category"]),
-            "options": get_poll_options(int(row["id"]), db_path),
+            "options": options_by_poll.get(int(row["id"]), []),
         }
-        for row in rows
+        for row in poll_rows
     ]
 
 
@@ -567,6 +595,16 @@ def get_vote_summary(poll_id: int, db_path: str | Path | None = None) -> dict[st
     for row in rows:
         summary[str(row["option_text"])] = int(row["vote_count"])
     return summary
+
+
+def get_total_active_votes(db_path: str | Path | None = None) -> int:
+    """Return total vote count across all active polls in a single query."""
+    row = fetch_one(
+        "SELECT COUNT(v.id) AS total FROM votes v "
+        "JOIN polls p ON p.id = v.poll_id WHERE p.is_active = 1",
+        db_path=db_path,
+    )
+    return int(row["total"]) if row else 0
 
 
 def _ensure_poll_options(

@@ -4,6 +4,35 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS user_accounts (
+    id BIGSERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    nickname TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_player_pool (
+    id BIGSERIAL PRIMARY KEY,
+    username TEXT NOT NULL,
+    player_id INTEGER NOT NULL,
+    player_name TEXT NOT NULL,
+    purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (username, player_id)
+);
+
+CREATE TABLE IF NOT EXISTS hall_poll_definitions (
+    id BIGSERIAL PRIMARY KEY,
+    poll_key TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    subtitle TEXT NOT NULL,
+    poll_type TEXT NOT NULL CHECK (poll_type IN ('player', 'team', 'custom')),
+    options_json TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS polls (
     id BIGSERIAL PRIMARY KEY,
     title TEXT NOT NULL,
