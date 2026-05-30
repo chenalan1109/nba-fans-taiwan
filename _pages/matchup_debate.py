@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from config.settings import get_admin_password
+from services.auth_service import is_admin_user
 from database.seed_data import get_seed_matchups
 from models.player import Player
 from services.game_service import (
@@ -95,9 +95,10 @@ def render() -> None:
     with tab_vote:
         _render_vote_panel(str(matchup["id"]), team_a_name, team_b_name, is_custom)
 
-    st.divider()
-    with st.expander("🔑 管理員模式"):
-        _render_admin_panel(custom_matchup_list)
+    if is_admin_user(st.session_state.get("logged_in_user")):
+        st.divider()
+        with st.expander("管理員模式"):
+            _render_admin_panel(custom_matchup_list)
 
 
 def _render_team_cards(team_a: list[Player], team_b: list[Player], team_a_name: str, team_b_name: str) -> None:
@@ -255,22 +256,6 @@ def _matchup_player_options(seed_players: list[Player], keyword: str, selected: 
 
 
 def _render_admin_panel(custom_matchups: list[dict]) -> None:
-    if not st.session_state.get("is_admin"):
-        pwd = st.text_input("輸入管理員密碼", type="password", key="admin_pwd_input")
-        if st.button("解鎖", key="admin_unlock"):
-            if pwd == get_admin_password():
-                st.session_state["is_admin"] = True
-                st.rerun()
-            else:
-                st.error("密碼錯誤。")
-        return
-
-    col_status, col_logout = st.columns([5, 1])
-    col_status.success("管理員模式已解鎖")
-    if col_logout.button("登出", key="admin_logout"):
-        del st.session_state["is_admin"]
-        st.rerun()
-
     if not custom_matchups:
         st.info("目前沒有自訂對決。")
         return

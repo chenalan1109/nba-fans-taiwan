@@ -4,6 +4,7 @@ import streamlit as st
 
 from config.settings import get_runtime_settings
 from database.db import init_db
+from services.auth_service import seed_admin_account
 from _pages import auth_page, fantasy_team, home, matchup_debate, player_stats, realtime_hub, voting
 from services import prophet_service as ps
 from services.nba_api_service import get_data_mode
@@ -24,6 +25,7 @@ PAGES = {
 def initialize_app() -> None:
     if "db_initialized" not in st.session_state:
         init_db()
+        seed_admin_account()
         st.session_state["db_initialized"] = True
 
 

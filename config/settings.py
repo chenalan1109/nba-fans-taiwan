@@ -7,6 +7,7 @@ from dataclasses import dataclass
 APP_MODE_ENV_VAR = "APP_MODE"
 DATABASE_URL_ENV_VAR = "DATABASE_URL"
 ADMIN_PASSWORD_ENV_VAR = "ADMIN_PASSWORD"
+ADMIN_USERNAME_ENV_VAR = "ADMIN_USERNAME"
 APP_MODE_LOCAL = "local"
 APP_MODE_CLOUD = "cloud"
 
@@ -46,6 +47,10 @@ def get_app_mode() -> str:
 
 def get_admin_password() -> str:
     return _get_env(ADMIN_PASSWORD_ENV_VAR) or "admin"
+
+
+def get_admin_username() -> str:
+    return _get_env(ADMIN_USERNAME_ENV_VAR) or "admin"
 
 
 def get_database_url() -> str | None:

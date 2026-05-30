@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import datetime
-import os
 from typing import Any
 
 import streamlit as st
 
 from config.settings import get_runtime_settings
+from services.auth_service import is_admin_user
 from services import prophet_service as ps
 from services.cached import get_playoff_series, get_season_phase
 from services.hall_service import (
@@ -242,19 +242,10 @@ def _render_hall_chart(poll_key: str) -> None:
 # ── Hall admin panel ───────────────────────────────────────────────────────────
 
 def _render_hall_admin_panel() -> None:
+    if not is_admin_user(st.session_state.get("logged_in_user")):
+        return
     st.divider()
-    with st.expander("🔑 球員殿堂管理員（新增 / 刪除投票主題）"):
-        pwd = st.text_input("管理員密碼", type="password", key="hall_admin_pwd")
-        expected = os.getenv("PROPHET_ADMIN_PASSWORD", "admin")
-        if not pwd:
-            st.caption("輸入密碼後解鎖管理功能。")
-            return
-        if pwd != expected:
-            st.error("密碼錯誤。")
-            return
-
-        st.success("已驗證，可管理投票主題。")
-
+    with st.expander("球員殿堂管理員（新增 / 刪除投票主題）"):
         st.markdown("**現有投票主題**")
         all_polls = list_all_hall_polls()
         for p in all_polls:
@@ -574,17 +565,9 @@ def _render_leaderboard_tab() -> None:
 # ── Admin settlement panel ────────────────────────────────────────────────────
 
 def _render_admin_panel(season: str) -> None:
-    with st.expander("🔑 管理員結算（長期獎項）"):
-        pwd = st.text_input("管理員密碼", type="password", key="admin_pwd")
-        expected = os.getenv("PROPHET_ADMIN_PASSWORD", "admin")
-        if not pwd:
-            st.caption("輸入密碼後解鎖結算功能。")
-            return
-        if pwd != expected:
-            st.error("密碼錯誤。")
-            return
-
-        st.success("已驗證，可進行結算操作。")
+    if not is_admin_user(st.session_state.get("logged_in_user")):
+        return
+    with st.expander("管理員結算（長期獎項）"):
         items = [
             it for it in ps.get_all_items(season)
             if it["category"] == "longterm" and it["status"] != "settled"

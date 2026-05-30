@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from config.settings import get_admin_password
+from services.auth_service import is_admin_user
 from services.cached import get_game_boxscore, get_game_officials, get_recent_games, get_scoreboard
 from services.comment_service import (
     add_comment,
@@ -63,15 +63,15 @@ def render() -> None:
     with tab_today:
         scoreboard = get_scoreboard(data_mode=get_data_mode())
         render_source_badge(str(scoreboard.get("source") or ""))
-        _render_game_section(scoreboard["items"], "今日賽程")
+        _render_game_section(scoreboard["items"], "今日賽程", "today")
 
     with tab_recent:
         recent_data = get_recent_games(data_mode=get_data_mode())
         render_source_badge(str(recent_data.get("source") or ""))
-        _render_game_section(recent_data["items"], "最近 7 天")
+        _render_game_section(recent_data["items"], "最近 7 天", "recent")
 
 
-def _render_game_section(games: list[dict[str, Any]], kpi_sub: str) -> None:
+def _render_game_section(games: list[dict[str, Any]], kpi_sub: str, section: str = "") -> None:
     if not games:
         st.info("目前沒有可顯示的賽程資料。")
         return
@@ -92,11 +92,11 @@ def _render_game_section(games: list[dict[str, Any]], kpi_sub: str) -> None:
             away_score=int(game.get("away_score", 0) or 0),
             status=str(game.get("status", "")),
         )
-        _render_boxscore_expander(game)
-        _render_comment_expander(game)
+        _render_boxscore_expander(game, section)
+        _render_comment_expander(game, section)
 
 
-def _render_boxscore_expander(game: dict[str, object]) -> None:
+def _render_boxscore_expander(game: dict[str, object], section: str = "") -> None:
     game_id = str(game.get("game_id") or "")
     status = str(game.get("status") or "")
     home_team = str(game.get("home_team") or "主隊")
@@ -123,15 +123,15 @@ def _render_boxscore_expander(game: dict[str, object]) -> None:
 
         tab_home, tab_away = st.tabs([f"🏠 {home_team}", f"✈️ {away_team}"])
         with tab_home:
-            _render_player_table(home_players, game_id, "home")
+            _render_player_table(home_players, game_id, "home", section)
         with tab_away:
-            _render_player_table(away_players, game_id, "away")
+            _render_player_table(away_players, game_id, "away", section)
 
         st.divider()
-        _render_referee_vote_section(game_id, home_team, away_team)
+        _render_referee_vote_section(game_id, home_team, away_team, section)
 
 
-def _render_player_table(players: list[dict[str, Any]], game_id: str = "", side: str = "") -> None:
+def _render_player_table(players: list[dict[str, Any]], game_id: str = "", side: str = "", section: str = "") -> None:
     if not players:
         st.info("暫無球員數據。")
         return
@@ -146,14 +146,15 @@ def _render_player_table(players: list[dict[str, Any]], game_id: str = "", side:
             "3P%": st.column_config.NumberColumn("3P%", format="%.1f%%"),
         },
     )
-    _render_rating_section(players, game_id, side)
+    _render_rating_section(players, game_id, side, section)
 
 
-def _render_rating_section(players: list[dict[str, Any]], game_id: str = "", side: str = "") -> None:
+def _render_rating_section(players: list[dict[str, Any]], game_id: str = "", side: str = "", section: str = "") -> None:
     st.divider()
     render_section("球員評分")
 
-    scope = f"{game_id}_{side}" if game_id else "_".join(str(p.get("player_id", 0)) for p in players)
+    base_scope = f"{game_id}_{side}" if game_id else "_".join(str(p.get("player_id", 0)) for p in players)
+    scope = f"{section}_{base_scope}" if section else base_scope
     logged_user = st.session_state.get("logged_in_user")
     voter_id = logged_user["nickname"] if logged_user else ""
 
@@ -235,7 +236,7 @@ def _render_rating_section(players: list[dict[str, Any]], game_id: str = "", sid
             st.rerun()
 
 
-def _render_referee_vote_section(game_id: str, home_team: str, away_team: str) -> None:
+def _render_referee_vote_section(game_id: str, home_team: str, away_team: str, section: str = "") -> None:
     render_section("裁判執法評分")
     st.caption("針對這場比賽的裁判評分，同一帳號對同一裁判只能評分一次。")
 
@@ -249,6 +250,8 @@ def _render_referee_vote_section(game_id: str, home_team: str, away_team: str) -
 
     ref_ids = [_referee_id(game_id, o["name"]) for o in officials]
     ratings_map = get_ratings_for_players(ref_ids)
+
+    pfx = f"{section}_" if section else ""
 
     for official, rid in zip(officials, ref_ids):
         name = official["name"]
@@ -283,13 +286,13 @@ def _render_referee_vote_section(game_id: str, home_team: str, away_team: str) -
                     "評分",
                     _STARS,
                     index=2,
-                    key=f"ref_rate_{rid}",
+                    key=f"{pfx}ref_rate_{rid}",
                     horizontal=True,
                     label_visibility="collapsed",
                 )
             with col_btn:
                 st.write("")
-                if st.button("送出", key=f"ref_rate_btn_{rid}"):
+                if st.button("送出", key=f"{pfx}ref_rate_btn_{rid}"):
                     rating_val = _STAR_MAP.get(str(choice), 3)
                     if submit_player_rating(rid, voter_id, rating_val):
                         st.success("評分成功！")
@@ -299,12 +302,12 @@ def _render_referee_vote_section(game_id: str, home_team: str, away_team: str) -
 
     if not voter_id:
         st.info("登入後即可為裁判評分。")
-        if st.button("前往登入/註冊", key=f"go_login_ref_{game_id}", type="primary"):
+        if st.button("前往登入/註冊", key=f"{pfx}go_login_ref_{game_id}", type="primary"):
             st.session_state["main_nav"] = "登入/註冊"
             st.rerun()
 
 
-def _render_comment_expander(game: dict[str, object]) -> None:
+def _render_comment_expander(game: dict[str, object], section: str = "") -> None:
     game_id = str(game.get("game_id") or "")
     if not game_id:
         return
@@ -312,6 +315,7 @@ def _render_comment_expander(game: dict[str, object]) -> None:
     comments = get_comments(game_id)
     count = len(comments)
     label = f"💬 留言討論（{count}）" if count else "💬 留言討論"
+    pfx = f"{section}_" if section else ""
 
     with st.expander(label, expanded=False):
         logged_user = st.session_state.get("logged_in_user")
@@ -321,11 +325,11 @@ def _render_comment_expander(game: dict[str, object]) -> None:
             new_comment = st.text_area(
                 "留言",
                 placeholder="分享你對這場比賽的想法...",
-                key=f"comment_text_{game_id}",
+                key=f"{pfx}comment_text_{game_id}",
                 height=80,
                 label_visibility="collapsed",
             )
-            if st.button("送出留言", key=f"comment_btn_{game_id}"):
+            if st.button("送出留言", key=f"{pfx}comment_btn_{game_id}"):
                 content = new_comment.strip()
                 if content:
                     if add_comment(game_id, voter_id, content):
@@ -336,13 +340,13 @@ def _render_comment_expander(game: dict[str, object]) -> None:
                     st.warning("留言內容不可為空。")
         else:
             st.info("登入後即可留言與按讚。")
-            if st.button("前往登入/註冊", key=f"go_login_comment_{game_id}", type="primary"):
+            if st.button("前往登入/註冊", key=f"{pfx}go_login_comment_{game_id}", type="primary"):
                 st.session_state["main_nav"] = "登入/註冊"
                 st.rerun()
 
         st.divider()
 
-        is_admin = bool(voter_id) and voter_id == get_admin_password()
+        is_admin = is_admin_user(logged_user)
 
         if not comments:
             st.caption("目前尚無留言，成為第一個！")
@@ -368,7 +372,7 @@ def _render_comment_expander(game: dict[str, object]) -> None:
                 like_icon = "❤️" if already_liked else "👍"
                 if st.button(
                     f"{like_icon} {like_count}",
-                    key=f"like_{game_id}_{cid}",
+                    key=f"{pfx}like_{game_id}_{cid}",
                     disabled=not voter_id or is_mine,
                     use_container_width=True,
                 ):
@@ -382,7 +386,7 @@ def _render_comment_expander(game: dict[str, object]) -> None:
                 if is_mine or is_admin:
                     if st.button(
                         "🗑",
-                        key=f"del_{game_id}_{cid}",
+                        key=f"{pfx}del_{game_id}_{cid}",
                         use_container_width=True,
                         help="刪除留言" if is_mine else "管理員刪除",
                     ):
