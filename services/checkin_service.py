@@ -5,7 +5,7 @@ import datetime
 
 from database.db import execute_query, fetch_one
 
-_DAILY_COINS = 150
+_DAILY_COINS = 50
 
 
 def can_checkin_today(username: str) -> bool:

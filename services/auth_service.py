@@ -149,3 +149,43 @@ def change_password(
         db_path=db_path,
     )
     return True, ""
+
+
+def list_all_users(db_path: str | Path | None = None) -> list[dict[str, Any]]:
+    """Return all user accounts (id, username, nickname, created_at)."""
+    from database.db import fetch_all
+    rows = fetch_all(
+        "SELECT id, username, nickname, created_at FROM user_accounts ORDER BY created_at DESC",
+        db_path=db_path,
+    )
+    return [dict(r) for r in rows]  # type: ignore[arg-type]
+
+
+def delete_user(username: str, db_path: str | Path | None = None) -> tuple[bool, str]:
+    """Delete a user account and all associated records."""
+    account = get_account(username, db_path)
+    if not account:
+        return False, f"找不到帳號「{username}」。"
+    nickname = str(account["nickname"])
+    try:
+        execute_query("DELETE FROM user_accounts WHERE username = ?", (username,), db_path=db_path)
+        execute_query("DELETE FROM prophet_users WHERE nickname = ?", (nickname,), db_path=db_path)
+        execute_query("DELETE FROM user_player_pool WHERE username = ?", (username,), db_path=db_path)
+        execute_query("DELETE FROM daily_checkins WHERE username = ?", (username,), db_path=db_path)
+        return True, f"帳號「{username}」已刪除。"
+    except Exception as exc:
+        return False, f"刪除失敗：{exc}"
+
+
+def add_coins_to_user(nickname: str, amount: int, db_path: str | Path | None = None) -> tuple[bool, str]:
+    """Add (or subtract) coins from a user. Amount may be negative to deduct."""
+    from database.db import fetch_one as _fetch_one
+    row = _fetch_one("SELECT coins FROM prophet_users WHERE nickname = ?", (nickname,), db_path=db_path)
+    if not row:
+        return False, f"找不到暱稱「{nickname}」的先知幣紀錄。"
+    execute_query(
+        "UPDATE prophet_users SET coins = coins + ? WHERE nickname = ?",
+        (amount, nickname),
+        db_path=db_path,
+    )
+    return True, f"已為「{nickname}」{'增加' if amount >= 0 else '扣除'} {abs(amount)} 先知幣。"

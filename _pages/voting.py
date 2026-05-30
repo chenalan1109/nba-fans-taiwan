@@ -7,7 +7,7 @@ from typing import Any
 import streamlit as st
 
 from config.settings import get_runtime_settings
-from services.auth_service import is_admin_user
+from services.auth_service import add_coins_to_user, delete_user, is_admin_user, list_all_users
 from services import prophet_service as ps
 from services.cached import get_nba_team_names, get_playoff_series, get_season_phase, search_prophet_players
 from services.hall_service import (
@@ -574,18 +574,73 @@ def _render_leaderboard_tab() -> None:
     lb = ps.get_leaderboard(20)
     if not lb:
         st.info("還沒有任何人獲得先知幣，快去下注吧！")
+    else:
+        for i, entry in enumerate(lb):
+            medal = ("🥇", "🥈", "🥉")[i] if i < 3 else f"{i + 1}."
+            st.markdown(
+                f"<div style='display:flex;justify-content:space-between;"
+                f"padding:6px 0;border-bottom:1px solid #2d2d44;'>"
+                f"<span style='color:#E8E8E8'>{medal} {entry['nickname']}</span>"
+                f"<span style='color:#C4A100;font-weight:bold'>{entry['coins']} 先知幣</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    _render_leaderboard_admin_panel()
+
+
+# ── Leaderboard admin panel ───────────────────────────────────────────────────
+
+def _render_leaderboard_admin_panel() -> None:
+    if not is_admin_user(st.session_state.get("logged_in_user")):
         return
 
-    for i, entry in enumerate(lb):
-        medal = ("🥇", "🥈", "🥉")[i] if i < 3 else f"{i + 1}."
-        st.markdown(
-            f"<div style='display:flex;justify-content:space-between;"
-            f"padding:6px 0;border-bottom:1px solid #2d2d44;'>"
-            f"<span style='color:#E8E8E8'>{medal} {entry['nickname']}</span>"
-            f"<span style='color:#C4A100;font-weight:bold'>{entry['coins']} 先知幣</span>"
-            f"</div>",
-            unsafe_allow_html=True,
+    st.divider()
+    with st.expander("管理員：帳號管理", expanded=False):
+        users = list_all_users()
+        if not users:
+            st.info("目前沒有任何帳號。")
+            return
+
+        # ── 刪除帳號 ──
+        st.markdown("**刪除帳號**")
+        st.caption("刪除後資料無法恢復，請確認帳號名稱。")
+        usernames = [u["username"] for u in users]
+        del_target = st.selectbox("選擇要刪除的帳號", usernames, key="admin_lb_del_select")
+        if del_target:
+            matched = next((u for u in users if u["username"] == del_target), None)
+            if matched:
+                st.caption(f"暱稱：{matched['nickname']}　建立時間：{matched['created_at']}")
+        if st.button("確認刪除", key="admin_lb_del_btn", type="primary"):
+            ok, msg = delete_user(str(del_target))
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
+
+        st.divider()
+
+        # ── 加幣 / 扣幣 ──
+        st.markdown("**調整先知幣**")
+        coin_nick = st.selectbox(
+            "選擇帳號（暱稱）",
+            [u["nickname"] for u in users],
+            key="admin_lb_coin_select",
         )
+        coin_amount = st.number_input(
+            "調整數量（正數加幣、負數扣幣）",
+            value=100,
+            step=50,
+            key="admin_lb_coin_amount",
+        )
+        if st.button("確認調整", key="admin_lb_coin_btn"):
+            ok, msg = add_coins_to_user(str(coin_nick), int(coin_amount))
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
 
 
 # ── Admin settlement panel ────────────────────────────────────────────────────
