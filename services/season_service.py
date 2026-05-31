@@ -197,6 +197,27 @@ def _fetch_playoff_series() -> list[dict[str, Any]]:
             "round": _ROUND_LABELS.get(rnd, f"第{rnd}輪") if rnd else "季後賽",
         })
 
+    # Synthesize a Finals entry when both conf finals are done but no game has been played yet
+    if not any(s["round_num"] == 4 for s in all_series):
+        round3_done = [s for s in all_series if s["round_num"] == 3 and s["status"] == "finished"]
+        east_final = next((s for s in round3_done if s["conference"] == "East"), None)
+        west_final = next((s for s in round3_done if s["conference"] == "West"), None)
+        if east_final and east_final.get("winner") and west_final and west_final.get("winner"):
+            name_to_abbr = {
+                str(info.get("full_name", "")): str(info.get("abbreviation", ""))
+                for info in id_to_info.values()
+            }
+            ew, ww = east_final["winner"], west_final["winner"]
+            all_series.append({
+                "team_a": ww, "team_b": ew,
+                "team_a_abbr": name_to_abbr.get(ww, ""),
+                "team_b_abbr": name_to_abbr.get(ew, ""),
+                "wins_a": 0, "wins_b": 0,
+                "conference": "Finals",
+                "status": "ongoing", "winner": None,
+                "round_num": 4, "round": "NBA Finals",
+            })
+
     return sorted(all_series, key=lambda x: x["round_num"])
 
 

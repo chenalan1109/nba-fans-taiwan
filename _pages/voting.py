@@ -324,6 +324,13 @@ def _render_instant_tab(nickname: str, series_list: list[dict[str, Any]], season
     render_section("季後賽晉級預測")
     st.caption("每個系列賽開賽前開放下注 → 第一場開打後進入進行中 → 系列賽結束自動結算先知幣。")
 
+    if is_admin_user(_current_user()):
+        if st.button("🔄 強制同步賽事資料", key="force_sync_instant", help="清除快取並立即重新同步，用於新一輪剛開放時"):
+            get_playoff_series.clear()
+            st.session_state.pop("_prophet_sync_ts", None)
+            st.session_state.pop(f"_series_loaded_{season}", None)
+            st.rerun()
+
     items = [it for it in ps.get_all_items(season) if it["category"] == "instant"]
     if not items:
         st.info("目前沒有開放的即時預測。\n\n季後賽開始後，系統會自動依輪次開放各系列賽預測。")
