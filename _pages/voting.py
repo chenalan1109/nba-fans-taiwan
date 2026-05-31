@@ -66,7 +66,13 @@ def render() -> None:
     phase = SeasonPhase(get_season_phase(data_mode))
     series_list: list[dict[str, Any]] = []
     if phase in (SeasonPhase.PLAYOFFS, SeasonPhase.PLAY_IN):
-        series_list = get_playoff_series(data_mode)
+        _series_cache_key = f"_series_loaded_{season}"
+        if _series_cache_key not in st.session_state:
+            with st.spinner("載入賽事資料..."):
+                series_list = get_playoff_series(data_mode)
+            st.session_state[_series_cache_key] = True
+        else:
+            series_list = get_playoff_series(data_mode)
 
     ensure_playoff_polls(phase=phase.value, series_list=series_list)
 

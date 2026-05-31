@@ -32,12 +32,12 @@ def get_game_officials(game_id: str, data_mode: str) -> list[dict[str, Any]]:
     return nba_api_service.get_game_officials(game_id)
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=3600)
 def get_season_phase(data_mode: str) -> str:
     return season_service.detect_season_phase().value
 
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=1800)
 def get_playoff_series(data_mode: str) -> list[dict[str, Any]]:
     return season_service.get_playoff_series()
 
