@@ -488,7 +488,11 @@ def _normalize_gamelog(df: Any) -> list[dict[str, Any]]:
 
 
 def get_recent_games(days: int = 7) -> dict[str, Any]:
-    """Return completed games from the past `days` days."""
+    """Return completed games from the past `days` days.
+
+    Tries Playoffs first (covers post-season), then Regular Season (covers
+    the regular schedule), finally falls back to seed data.
+    """
     from datetime import datetime, timedelta
 
     if _is_seed_mode():
@@ -499,18 +503,21 @@ def get_recent_games(days: int = 7) -> dict[str, Any]:
 
     try:
         from nba_api.stats.endpoints import leaguegamelog
-        log = leaguegamelog.LeagueGameLog(
-            season=_current_season(),
-            date_from_nullable=date_from,
-            direction="DESC",
-            league_id="00",
-            timeout=10,
-        )
-        df = log.get_data_frames()[0]
-        if not df.empty:
-            items = _normalize_gamelog(df)
-            if items:
-                return _api_response(items)
+        season = _current_season()
+        for season_type in ("Playoffs", "Regular Season"):
+            log = leaguegamelog.LeagueGameLog(
+                season=season,
+                date_from_nullable=date_from,
+                season_type_all_star=season_type,
+                direction="DESC",
+                league_id="00",
+                timeout=10,
+            )
+            df = log.get_data_frames()[0]
+            if not df.empty:
+                items = _normalize_gamelog(df)
+                if items:
+                    return _api_response(items)
     except Exception as exc:
         errors.append(f"leaguegamelog: {exc}")
 
