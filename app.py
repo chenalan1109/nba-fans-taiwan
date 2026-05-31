@@ -51,7 +51,7 @@ def main() -> None:
             st.markdown(f"👤 **{user['username']}**")
             st.caption(f"暱稱：{nickname}　💰 {prophet_user['coins']} 先知幣")
             if can_checkin_today(user["username"]):
-                if st.button("每日簽到 (+150 先知幣)", key="sidebar_checkin", use_container_width=True):
+                if st.button("每日簽到 (+50 先知幣)", key="sidebar_checkin", use_container_width=True):
                     ok, msg = do_checkin(user["username"], nickname)
                     if ok:
                         st.success(msg)
