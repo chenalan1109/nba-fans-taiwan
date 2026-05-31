@@ -190,7 +190,17 @@ def render_vs_block(
     st.markdown(html, unsafe_allow_html=True)
 
 
-def render_game_card(home_team: str, away_team: str, home_score: int, away_score: int, status: str) -> None:
+def render_game_card(
+    home_team: str,
+    away_team: str,
+    home_score: int,
+    away_score: int,
+    status: str,
+    game_date: str = "",
+) -> None:
+    date_html = (
+        f'<div class="gc-date">{_escape(game_date)}</div>' if game_date else ""
+    )
     html = (
         '<div class="spurs-game-card">'
         f'<div class="gc-name gc-home">{_escape(home_team)}</div>'
@@ -199,6 +209,7 @@ def render_game_card(home_team: str, away_team: str, home_score: int, away_score
         f'<div class="gc-score gc-home">{home_score}</div>'
         f'<div class="gc-status">{_escape(status)}</div>'
         f'<div class="gc-score gc-away">{away_score}</div>'
+        f'{date_html}'
         '</div>'
     )
     st.markdown(html, unsafe_allow_html=True)

@@ -601,10 +601,11 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checke
     margin-bottom: 0.6rem;
     display: grid;
     grid-template-columns: 1fr auto 1fr;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
     grid-template-areas:
         "hname mid-top aname"
-        "hscore status  ascore";
+        "hscore status  ascore"
+        "date  date    date";
     align-items: center;
     gap: 0.15rem 0.8rem;
 }}
@@ -618,6 +619,15 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checke
 .spurs-game-card .gc-score.gc-home {{ grid-area: hscore; }}
 .spurs-game-card .gc-score.gc-away {{ grid-area: ascore; }}
 .spurs-game-card .gc-status {{ grid-area: status; }}
+.spurs-game-card .gc-date {{
+    grid-area: date;
+    text-align: center;
+    color: {COLORS["cool_blue_gray"]};
+    font-size: 0.75rem;
+    margin-top: 0.35rem;
+    border-top: 1px solid #2A2C2F;
+    padding-top: 0.35rem;
+}}
 
 .spurs-game-card .gc-name {{
     color: {COLORS["white"]};

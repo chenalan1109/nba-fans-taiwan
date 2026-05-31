@@ -91,6 +91,7 @@ def _render_game_section(games: list[dict[str, Any]], kpi_sub: str, section: str
             home_score=int(game.get("home_score", 0) or 0),
             away_score=int(game.get("away_score", 0) or 0),
             status=str(game.get("status", "")),
+            game_date=str(game.get("game_date", "")),
         )
         _render_boxscore_expander(game, section)
         _render_comment_expander(game, section)
